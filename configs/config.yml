@@ -1,0 +1,24 @@
+data:
+  raw_path: "/mnt/hdd/churn_project/data/raw/churn_data.csv"
+  interim_path: "/mnt/hdd/churn_project/data/interim/churn_processed.parquet"
+  processed_path: "/mnt/hdd/churn_project/data/processed/churn_features.parquet"
+
+training:
+  target_column: "churn"
+  test_size: 0.2
+  random_seed: 42
+  cv_folds: 5
+  
+models:
+  save_path: "/mnt/hdd/churn_project/models/"
+  random_seed: 42
+  test_size: 0.2
+  validation_size: 0.25
+  
+hyperparameter_tuning:
+  n_trials: 50
+  timeout: 600
+  
+reports:
+  figures_path: "/mnt/hdd/churn_project/reports/figures/"
+  metrics_path: "/mnt/hdd/churn_project/reports/metrics.json"

@@ -54,6 +54,19 @@ class ChurnDataProcessor:
         logger.info(f"Loading data from {file_path}...")
         
         try:
+            # For very large files, try with polars directly if possible
+            try:
+                # First check if it's a CSV that polars can read directly
+                if file_path.endswith('.csv'):
+                    logger.info("Trying to load with polars directly")
+                    df = pl.read_csv(file_path)
+                    logger.info(f"Dataset loaded successfully with shape: {df.shape}")
+                    self.data_raw = df
+                    return df
+            except Exception as e:
+                logger.info(f"Direct loading failed, falling back to arff loader: {e}")
+            
+            # Original ARFF loading code follows
             data, meta = arff.loadarff(file_path)
             
             # First convert to pandas (arff loader returns pandas-compatible format)

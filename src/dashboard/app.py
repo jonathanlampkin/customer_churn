@@ -1,5 +1,5 @@
 """
-Streamlit dashboard for monitoring churn prediction models
+Streamlit dashboard for visualizing churn prediction results
 """
 
 import os
@@ -7,371 +7,340 @@ import sys
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 import streamlit as st
+import plotly.express as px
+import plotly.graph_objects as go
 import yaml
 import joblib
 import json
-from datetime import datetime, timedelta
-import plotly.express as px
-import plotly.graph_objects as go
+from pathlib import Path
 
-# Add parent directory to path to import from src
+# Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from src.models.model_trainer import ModelTrainer
 from src.models.model_explainer import ModelExplainer
-
-# Load configuration
-with open('configs/config.yml', 'r') as f:
-    config = yaml.safe_load(f)
+from PIL import Image
 
 # Set page config
 st.set_page_config(
     page_title="Churn Prediction Dashboard",
     page_icon="📊",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-# Define functions for dashboard components
-def load_model_metadata():
-    """Load model metadata from the most recent training run"""
-    metadata_dir = 'models/metadata'
-    if not os.path.exists(metadata_dir):
-        return None
-    
-    metadata_files = sorted([f for f in os.listdir(metadata_dir) if f.endswith('.yml')])
-    if not metadata_files:
-        return None
-    
-    latest_metadata_file = os.path.join(metadata_dir, metadata_files[-1])
-    with open(latest_metadata_file, 'r') as f:
-        metadata = yaml.safe_load(f)
-    
-    return metadata
+# Custom CSS
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        font-weight: 600;
+        color: #1E88E5;
+    }
+    .section-header {
+        font-size: 1.8rem;
+        font-weight: 500;
+        color: #333;
+        margin-top: 1rem;
+    }
+    .metric-card {
+        background-color: #f5f5f5;
+        border-radius: 5px;
+        padding: 1rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .feature-importance-item {
+        padding: 5px;
+        margin: 2px 0;
+        border-radius: 3px;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-def load_model_history():
-    """Load history of model performance from all training runs"""
-    metadata_dir = 'models/metadata'
-    if not os.path.exists(metadata_dir):
-        return None
-    
-    metadata_files = sorted([f for f in os.listdir(metadata_dir) if f.endswith('.yml')])
-    if not metadata_files:
-        return None
-    
-    history = []
-    for file in metadata_files:
-        with open(os.path.join(metadata_dir, file), 'r') as f:
-            metadata = yaml.safe_load(f)
-            
-            # Extract timestamp and metrics
-            timestamp = datetime.fromisoformat(metadata['timestamp'])
-            metrics = metadata['metrics']
-            
-            history.append({
-                'timestamp': timestamp,
-                **metrics
-            })
-    
-    return pd.DataFrame(history)
+def load_config(config_path: str = 'configs/config.yml') -> dict:
+    """Load project configuration"""
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    return config
 
-def load_explanations():
+def load_model_metrics():
+    """Load model metrics from the evaluation results"""
+    try:
+        metrics_path = "reports/model_metrics.json"
+        if os.path.exists(metrics_path):
+            with open(metrics_path, 'r') as f:
+                metrics = json.load(f)
+            return metrics
+        else:
+            return None
+    except Exception as e:
+        st.error(f"Error loading model metrics: {e}")
+        return None
+
+def load_feature_importance():
+    """Load feature importance data"""
+    try:
+        importance_path = "reports/feature_importance.csv"
+        if os.path.exists(importance_path):
+            importance_df = pd.read_csv(importance_path)
+            return importance_df
+        else:
+            return None
+    except Exception as e:
+        st.error(f"Error loading feature importance: {e}")
+        return None
+
+def load_explanation_samples():
     """Load sample explanations"""
-    explanation_path = 'reports/sample_explanations.json'
-    if not os.path.exists(explanation_path):
+    try:
+        explanation_path = "reports/sample_explanations.json"
+        if os.path.exists(explanation_path):
+            with open(explanation_path, 'r') as f:
+                explanations = json.load(f)
+            return explanations
+        else:
+            return None
+    except Exception as e:
+        st.error(f"Error loading explanations: {e}")
         return None
-    
-    with open(explanation_path, 'r') as f:
-        explanations = json.load(f)
-    
-    return explanations
 
-# Dashboard title
-st.title("Churn Prediction Dashboard")
-
-# Sidebar
-st.sidebar.header("Navigation")
-page = st.sidebar.radio("Select Page", ["Model Performance", "Model Explanations", "Prediction Simulator"])
-
-# Main content
-if page == "Model Performance":
-    st.header("Model Performance Metrics")
+def display_model_metrics(metrics):
+    """Display model performance metrics"""
+    st.markdown('<div class="section-header">Model Performance</div>', unsafe_allow_html=True)
     
-    # Load model metadata
-    metadata = load_model_metadata()
-    history = load_model_history()
+    if not metrics:
+        st.warning("No model metrics available.")
+        return
     
-    if metadata and history is not None:
-        # Display latest metrics
-        st.subheader("Latest Model Performance")
+    best_model = metrics.get('best_model', '')
+    best_metrics = metrics.get('metrics', {})
+    
+    if not best_metrics:
+        st.warning("No metrics available for the best model.")
+        return
+    
+    # Create a row of metrics
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Accuracy", f"{best_metrics.get('accuracy', 0):.4f}")
+    
+    with col2:
+        st.metric("ROC AUC", f"{best_metrics.get('roc_auc', 0):.4f}")
+    
+    with col3:
+        st.metric("Precision", f"{best_metrics.get('precision', 0):.4f}")
+    
+    with col4:
+        st.metric("Recall", f"{best_metrics.get('recall', 0):.4f}")
+    
+    # Model comparison
+    st.subheader("Model Comparison")
+    
+    all_models = metrics.get('metrics', {})
+    if all_models:
+        # Prepare data for plotting
+        model_names = list(all_models.keys())
+        accuracy = [all_models[m].get('accuracy', 0) for m in model_names]
+        roc_auc = [all_models[m].get('roc_auc', 0) for m in model_names]
+        precision = [all_models[m].get('precision', 0) for m in model_names]
+        recall = [all_models[m].get('recall', 0) for m in model_names]
         
-        latest = history.iloc[-1]
-        latest_metrics = {k: v for k, v in latest.items() if k != 'timestamp'}
+        # Create comparison dataframe
+        comparison_df = pd.DataFrame({
+            'Model': model_names,
+            'Accuracy': accuracy,
+            'ROC AUC': roc_auc,
+            'Precision': precision,
+            'Recall': recall
+        })
         
-        # Create metric display
-        cols = st.columns(len(latest_metrics))
-        for i, (metric, value) in enumerate(latest_metrics.items()):
-            with cols[i]:
-                delta = None
-                if len(history) > 1:
-                    previous = history.iloc[-2][metric]
-                    delta = value - previous
-                st.metric(label=metric.upper(), value=f"{value:.4f}", delta=f"{delta:.4f}" if delta is not None else None)
+        # Plot using plotly
+        fig = go.Figure()
         
-        # Plot metrics over time
-        st.subheader("Performance Trends")
+        fig.add_trace(go.Bar(x=model_names, y=accuracy, name='Accuracy', marker_color='#1f77b4'))
+        fig.add_trace(go.Bar(x=model_names, y=roc_auc, name='ROC AUC', marker_color='#ff7f0e'))
+        fig.add_trace(go.Bar(x=model_names, y=precision, name='Precision', marker_color='#2ca02c'))
+        fig.add_trace(go.Bar(x=model_names, y=recall, name='Recall', marker_color='#d62728'))
         
-        # Select metrics to display
-        metrics_to_plot = st.multiselect(
-            "Select metrics to display", 
-            options=[col for col in history.columns if col != 'timestamp'],
-            default=['accuracy', 'roc_auc', 'precision', 'recall']
+        fig.update_layout(
+            title='Model Performance Comparison',
+            xaxis_title='Model',
+            yaxis_title='Score',
+            barmode='group',
+            yaxis=dict(range=[0, 1]),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            height=500
         )
         
-        if metrics_to_plot:
-            fig = go.Figure()
-            for metric in metrics_to_plot:
-                fig.add_trace(go.Scatter(
-                    x=history['timestamp'],
-                    y=history[metric],
-                    mode='lines+markers',
-                    name=metric
-                ))
-            
-            fig.update_layout(
-                title="Model Performance Over Time",
-                xaxis_title="Training Date",
-                yaxis_title="Score",
-                height=500
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("No model training history available. Run the pipeline to generate metrics.")
-    
-    # Display static visualizations
-    st.subheader("Model Evaluation Visualizations")
-    
-    confusion_matrix_path = 'reports/figures/confusion_matrix.png'
-    roc_curve_path = 'reports/figures/roc_curve.png'
-    pr_curve_path = 'reports/figures/precision_recall_curve.png'
-    
-    cols = st.columns(3)
-    
-    if os.path.exists(confusion_matrix_path):
-        with cols[0]:
-            st.image(confusion_matrix_path, caption="Confusion Matrix")
-    
-    if os.path.exists(roc_curve_path):
-        with cols[1]:
-            st.image(roc_curve_path, caption="ROC Curve")
-    
-    if os.path.exists(pr_curve_path):
-        with cols[2]:
-            st.image(pr_curve_path, caption="Precision-Recall Curve")
-    
-    # Feature importance
-    feature_importance_path = 'reports/figures/feature_importance.png'
-    if os.path.exists(feature_importance_path):
-        st.subheader("Feature Importance")
-        st.image(feature_importance_path, caption="Top Features by Importance")
-
-elif page == "Model Explanations":
-    st.header("Model Explanations")
-    
-    # Load sample explanations
-    explanations = load_explanations()
-    
-    if explanations:
-        st.subheader("Sample Predictions Explained")
+        st.plotly_chart(fig, use_container_width=True)
         
-        # Select a sample to explain
-        selected_sample = st.selectbox(
-            "Select a sample to explain",
-            options=range(len(explanations)),
-            format_func=lambda x: f"Sample {explanations[x]['sample_id']} - Predicted: {explanations[x]['prediction']:.2f}, Actual: {explanations[x]['actual_class']}"
+        # Display comparison table
+        st.dataframe(comparison_df.set_index('Model').style.format("{:.4f}"), use_container_width=True)
+
+def display_feature_importance(importance_df):
+    """Display feature importance visualization"""
+    st.markdown('<div class="section-header">Feature Importance</div>', unsafe_allow_html=True)
+    
+    if importance_df is None:
+        st.warning("No feature importance data available.")
+        return
+    
+    # Sort by importance
+    importance_df = importance_df.sort_values('Importance', ascending=False).reset_index(drop=True)
+    
+    # Display top 15 features
+    top_features = importance_df.head(15)
+    
+    fig = px.bar(
+        top_features, 
+        x='Importance', 
+        y='Feature',
+        orientation='h',
+        title='Top 15 Features by Importance',
+        color='Importance',
+        color_continuous_scale='viridis',
+    )
+    
+    fig.update_layout(height=500, yaxis={'categoryorder': 'total ascending'})
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Feature impact explanation
+    st.subheader("Feature Impact Analysis")
+    st.write("""
+    The chart above shows the most important features in predicting customer churn. 
+    Features at the top have the strongest influence on the model's predictions.
+    """)
+    
+    # Show importance table with descriptions
+    feature_descriptions = {
+        # Add your feature descriptions here
+        # Example: "feature_name": "Description of what this feature means"
+    }
+    
+    # Add descriptions if available
+    if feature_descriptions:
+        importance_df['Description'] = importance_df['Feature'].map(
+            lambda x: feature_descriptions.get(x, "No description available")
         )
-        
-        explanation = explanations[selected_sample]
-        
-        cols = st.columns(2)
-        
-        with cols[0]:
-            st.subheader("Prediction Details")
-            st.write(f"**Prediction Score:** {explanation['prediction']:.4f}")
-            st.write(f"**Actual Class:** {explanation['actual_class']}")
-            
-            # Display top features
-            st.subheader("Top Contributing Factors")
-            
-            # Positive factors
-            st.write("**Factors increasing churn risk:**")
-            for factor in explanation['top_positive_features']:
-                st.write(f"- {factor['feature']}: {factor['value']} (impact: +{factor['impact']:.4f})")
-            
-            # Negative factors
-            st.write("**Factors decreasing churn risk:**")
-            for factor in explanation['top_negative_features']:
-                st.write(f"- {factor['feature']}: {factor['value']} (impact: {factor['impact']:.4f})")
-        
-        with cols[1]:
-            # Display SHAP explanation plot
-            explanation_plot_path = f"reports/figures/explanations/sample_{explanation['sample_id']}_explanation.png"
-            if os.path.exists(explanation_plot_path):
-                st.image(explanation_plot_path, caption="SHAP Force Plot")
-        
-        # Display SHAP summary and dependence plots
-        st.subheader("Global Model Explanations")
-        
-        summary_plot_path = "reports/figures/explanations/summary_plot.png"
-        if os.path.exists(summary_plot_path):
-            st.image(summary_plot_path, caption="SHAP Summary Plot")
-        
-        # Dependence plots
-        st.subheader("Feature Dependence Plots")
-        
-        # Find all dependence plots
-        dependence_plots = [f for f in os.listdir('reports/figures/explanations') if f.startswith('dependence_')]
-        
-        if dependence_plots:
-            selected_plot = st.selectbox(
-                "Select a feature to analyze",
-                options=dependence_plots,
-                format_func=lambda x: x.replace('dependence_', '').replace('.png', '')
-            )
-            
-            plot_path = f"reports/figures/explanations/{selected_plot}"
-            st.image(plot_path)
-    else:
-        st.info("No model explanations available. Run the explainer to generate explanations.")
-        
-        if st.button("Generate Explanations"):
-            st.write("Generating explanations... This may take a moment.")
-            
-            with st.spinner("Running model explainer..."):
-                explainer = ModelExplainer()
-                explainer.run_all_explanations(sample_size=100)
-            
-            st.success("Explanations generated! Refresh the page to view them.")
-
-elif page == "Prediction Simulator":
-    st.header("Churn Prediction Simulator")
     
-    # Load the model
-    model_files = [f for f in os.listdir('models') if f.startswith('tuned_')]
-    
-    if model_files:
-        latest_model = sorted(model_files)[-1]
-        model_path = os.path.join('models', latest_model)
-        model = joblib.load(model_path)
-        
-        # Load a sample record from test data for simulation
-        try:
-            import polars as pl
-            
-            # Load model and test data
-            interim_path = config['data']['interim_path']
-            base_path = os.path.splitext(interim_path)[0]
-            X_test = pl.read_parquet(f"{base_path}_X_test.parquet").to_pandas()
-            
-            if not X_test.empty:
-                st.subheader("Enter Customer Information")
-                
-                # Get a sample record to initialize
-                sample_idx = 0
-                sample_record = X_test.iloc[sample_idx].to_dict()
-                
-                # Get feature names from test data
-                feature_names = X_test.columns.tolist()
-                
-                # Simulate input form
-                st.write("Enter customer details to predict churn probability:")
-                
-                # Display key features for input
-                top_features = ['feature1', 'feature2', 'feature3']  # Replace with actual top features
-                
-                # Create an editable form
-                with st.form("prediction_form"):
-                    # Create input fields for key features
-                    input_values = {}
-                    
-                    for feature in feature_names[:10]:  # Limit to 10 features for simplicity
-                        default_value = sample_record[feature]
-                        
-                        # Determine input type based on value
-                        if isinstance(default_value, (int, float)):
-                            input_values[feature] = st.number_input(
-                                f"{feature}:", 
-                                value=float(default_value),
-                                format="%.2f" if isinstance(default_value, float) else "%d"
-                            )
-                        elif isinstance(default_value, str):
-                            input_values[feature] = st.text_input(f"{feature}:", value=default_value)
-                        else:
-                            input_values[feature] = st.text_input(f"{feature}:", value=str(default_value))
-                    
-                    # Submit button
-                    submitted = st.form_submit_button("Predict Churn")
-                    
-                    if submitted:
-                        # Create input dataframe
-                        input_df = pd.DataFrame([input_values])
-                        
-                        # Make prediction
-                        prediction = model.predict_proba(input_df)[0, 1]
-                        churn_result = "Likely to Churn" if prediction >= 0.5 else "Not Likely to Churn"
-                        
-                        # Display result
-                        st.subheader("Prediction Result")
-                        
-                        # Show prediction gauge
-                        fig = go.Figure(go.Indicator(
-                            mode = "gauge+number",
-                            value = prediction,
-                            title = {'text': "Churn Probability"},
-                            gauge = {
-                                'axis': {'range': [0, 1]},
-                                'bar': {'color': "darkblue"},
-                                'steps': [
-                                    {'range': [0, 0.3], 'color': "green"},
-                                    {'range': [0.3, 0.7], 'color': "yellow"},
-                                    {'range': [0.7, 1], 'color': "red"}
-                                ]
-                            }
-                        ))
-                        
-                        fig.update_layout(height=300)
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                        st.write(f"**Prediction:** {churn_result} ({prediction:.2%} probability)")
-                        
-                        # Generate explanation if available
-                        if hasattr(model, 'feature_importances_'):
-                            # Get feature importances
-                            importances = model.feature_importances_
-                            feature_importance = pd.DataFrame({
-                                'feature': input_df.columns,
-                                'importance': importances,
-                                'value': [input_df[col].values[0] for col in input_df.columns]
-                            }).sort_values('importance', ascending=False)
-                            
-                            st.subheader("Top Contributing Factors")
-                            
-                            # Show top factors
-                            st.write("Features with the highest impact on this prediction:")
-                            for _, row in feature_importance.head(5).iterrows():
-                                st.write(f"- {row['feature']}: {row['value']} (importance: {row['importance']:.4f})")
-            else:
-                st.error("Test data is empty. Please run the pipeline to generate test data.")
-        except Exception as e:
-            st.error(f"Error loading test data: {e}")
-    else:
-        st.error("No trained model found. Please run the pipeline to train a model.")
+    st.dataframe(
+        importance_df[['Feature', 'Importance'] + (['Description'] if feature_descriptions else [])].head(15),
+        use_container_width=True
+    )
 
-# Footer
-st.sidebar.markdown("---")
-st.sidebar.info(
-    "This dashboard provides insights into the churn prediction model's "
-    "performance and explanations for its predictions."
-)
-st.sidebar.markdown("Last updated: " + datetime.now().strftime("%Y-%m-%d %H:%M")) 
+def display_sample_explanations(explanations):
+    """Display sample prediction explanations"""
+    st.markdown('<div class="section-header">Prediction Explanations</div>', unsafe_allow_html=True)
+    
+    if not explanations:
+        st.warning("No sample explanations available.")
+        return
+    
+    st.write("These examples show how the model makes predictions for specific customers.")
+    
+    # Select which sample to display
+    sample_idx = st.selectbox("Select a sample to explain:", 
+                             range(len(explanations)), 
+                             format_func=lambda i: f"Sample {i+1} - " + 
+                             ("Churned" if explanations[i]['prediction']['actual_class'] == 1 else "Did not churn"))
+    
+    if sample_idx is not None and 0 <= sample_idx < len(explanations):
+        explanation = explanations[sample_idx]
+        
+        # Sample information
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Prediction")
+            
+            actual = explanation['prediction']['actual_class']
+            predicted = explanation['prediction']['predicted_class']
+            probability = explanation['prediction']['probability']
+            correct = explanation['prediction']['correct']
+            
+            st.markdown(f"""
+            - **Actual outcome**: {'Churned' if actual == 1 else 'Did not churn'}
+            - **Predicted outcome**: {'Churned' if predicted == 1 else 'Did not churn'} (Confidence: {probability:.2%})
+            - **Prediction was**: {'Correct ✓' if correct else 'Incorrect ✗'}
+            """)
+        
+        with col2:
+            st.subheader("Key Factors")
+            
+            # Display top positive and negative features
+            pos_features = explanation.get('top_positive_features', [])
+            neg_features = explanation.get('top_negative_features', [])
+            
+            if pos_features:
+                st.markdown("**Factors increasing churn probability:**")
+                for i, feature in enumerate(pos_features[:3]):
+                    st.markdown(f"""
+                    <div class="feature-importance-item" style="background-color: rgba(255,152,150,{min(abs(feature['shap_value'])*5, 0.9)})">
+                        {i+1}. {feature['feature']}: {feature['value']}
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            if neg_features:
+                st.markdown("**Factors decreasing churn probability:**")
+                for i, feature in enumerate(neg_features[:3]):
+                    st.markdown(f"""
+                    <div class="feature-importance-item" style="background-color: rgba(152,223,138,{min(abs(feature['shap_value'])*5, 0.9)})">
+                        {i+1}. {feature['feature']}: {feature['value']}
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        # Visualization
+        st.subheader("Visualization of Feature Impacts")
+        
+        # Force plot image
+        if 'visualizations' in explanation and 'force_plot' in explanation['visualizations']:
+            force_plot_path = explanation['visualizations']['force_plot']
+            if os.path.exists(force_plot_path):
+                st.image(force_plot_path, caption="Force Plot - Shows how each feature contributes to the prediction")
+        
+        # Decision plot
+        if 'visualizations' in explanation and 'decision_plot' in explanation['visualizations']:
+            decision_plot_path = explanation['visualizations']['decision_plot']
+            if os.path.exists(decision_plot_path):
+                st.image(decision_plot_path, caption="Decision Plot - Shows the path to the final prediction")
+
+def main():
+    # Header
+    st.markdown('<div class="main-header">Churn Prediction Dashboard</div>', unsafe_allow_html=True)
+    
+    # Introduction
+    st.markdown("""
+    This dashboard provides insights into customer churn prediction, showing model performance,
+    feature importance, and example explanations of predictions. Use the sidebar to navigate.
+    """)
+    
+    # Sidebar
+    st.sidebar.title("Navigation")
+    page = st.sidebar.radio("Go to", ["Model Performance", "Feature Importance", "Prediction Explanations"])
+    
+    # Load data
+    metrics = load_model_metrics()
+    importance_df = load_feature_importance()
+    explanations = load_explanation_samples()
+    
+    # Display based on selection
+    if page == "Model Performance":
+        display_model_metrics(metrics)
+    
+    elif page == "Feature Importance":
+        display_feature_importance(importance_df)
+    
+    elif page == "Prediction Explanations":
+        display_sample_explanations(explanations)
+    
+    # Footer
+    st.sidebar.markdown("---")
+    st.sidebar.info(
+        "This dashboard visualizes the results of a machine learning model "
+        "trained to predict customer churn."
+    )
+
+if __name__ == "__main__":
+    main() 

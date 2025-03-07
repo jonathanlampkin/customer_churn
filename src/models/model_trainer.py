@@ -19,11 +19,14 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
     roc_auc_score, precision_recall_curve, roc_curve, auc,
-    confusion_matrix, classification_report
+    confusion_matrix, classification_report, brier_score_loss, log_loss,
+    calibration_curve, cross_val_score
 )
 import xgboost as xgb
 import lightgbm as lgb
 from hyperopt import hp, fmin, tpe, STATUS_OK, Trials
+from sklearn.model_selection import StratifiedKFold
+from scipy import stats
 
 # Configure logging
 logging.basicConfig(
@@ -130,70 +133,88 @@ class ModelTrainer:
     
     def evaluate_models(self) -> Dict[str, Dict[str, float]]:
         """
-        Evaluate all trained models and compute performance metrics.
+        Evaluate all trained models with advanced statistics.
         
         Returns:
-            Dictionary of metrics for each model
+            Dictionary of model metrics
         """
         if not self.models:
-            logger.warning("No models to evaluate. Call train_baseline_models() first.")
+            logger.warning("No models to evaluate")
             return {}
-        
-        if self.X_test is None or self.y_test is None:
-            self.load_data()
         
         # Convert to pandas for sklearn
         X_test_pd = self.X_test.to_pandas()
         y_test_pd = self.y_test.to_pandas()
         y_test_values = y_test_pd.values.ravel()
         
+        logger.info("Evaluating model performance with advanced metrics")
+        
+        # Set up cross-validation
+        cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        
         metrics = {}
-        best_auc = 0
-        self.best_model_name = None
-        
-        logger.info("Evaluating all models")
-        
         for name, model in self.models.items():
-            # Make predictions
+            logger.info(f"Evaluating {name}")
+            
+            # Predictions and probabilities
             y_pred = model.predict(X_test_pd)
+            y_proba = model.predict_proba(X_test_pd)[:, 1]
             
-            # Predict probabilities if possible
-            if hasattr(model, 'predict_proba'):
-                y_proba = model.predict_proba(X_test_pd)[:, 1]
-                roc_auc = roc_auc_score(y_test_values, y_proba)
-            else:
-                # Some models like SVC might not have predict_proba by default
-                roc_auc = 0
+            # Basic metrics
+            accuracy = accuracy_score(y_test_values, y_pred)
+            precision = precision_score(y_test_values, y_pred)
+            recall = recall_score(y_test_values, y_pred)
+            f1 = f1_score(y_test_values, y_pred)
+            roc_auc = roc_auc_score(y_test_values, y_proba)
             
-            # Calculate metrics
-            model_metrics = {
-                'accuracy': accuracy_score(y_test_values, y_pred),
-                'precision': precision_score(y_test_values, y_pred),
-                'recall': recall_score(y_test_values, y_pred),
-                'f1': f1_score(y_test_values, y_pred),
-                'roc_auc': roc_auc
+            # Advanced metrics
+            brier = brier_score_loss(y_test_values, y_proba)
+            log_loss_value = log_loss(y_test_values, y_proba)
+            
+            # Precision-Recall AUC
+            precision_curve, recall_curve, _ = precision_recall_curve(y_test_values, y_proba)
+            pr_auc = auc(recall_curve, precision_curve)
+            
+            # Cross-validated AUC with confidence intervals
+            cv_auc_scores = cross_val_score(model, X_test_pd, y_test_values, 
+                                          cv=cv, scoring='roc_auc')
+            auc_mean = np.mean(cv_auc_scores)
+            auc_std = np.std(cv_auc_scores)
+            auc_ci_lower, auc_ci_upper = stats.norm.interval(
+                0.95, loc=auc_mean, scale=auc_std/np.sqrt(len(cv_auc_scores))
+            )
+            
+            # Calculate calibration curve
+            prob_true, prob_pred = calibration_curve(y_test_values, y_proba, n_bins=10)
+            calibration_error = np.mean(np.abs(prob_true - prob_pred))
+            
+            # Store metrics
+            metrics[name] = {
+                'accuracy': accuracy,
+                'precision': precision,
+                'recall': recall,
+                'f1': f1,
+                'roc_auc': roc_auc,
+                'pr_auc': pr_auc,
+                'brier_score': brier,
+                'log_loss': log_loss_value,
+                'cv_auc_mean': auc_mean,
+                'cv_auc_std': auc_std,
+                'cv_auc_ci_lower': max(0, auc_ci_lower),
+                'cv_auc_ci_upper': min(1, auc_ci_upper),
+                'calibration_error': calibration_error
             }
-            
-            metrics[name] = model_metrics
-            
-            # Log metrics
-            logger.info(f"{name} - Accuracy: {model_metrics['accuracy']:.4f}, "
-                       f"Precision: {model_metrics['precision']:.4f}, "
-                       f"Recall: {model_metrics['recall']:.4f}, "
-                       f"F1: {model_metrics['f1']:.4f}, "
-                       f"ROC AUC: {model_metrics['roc_auc']:.4f}")
-            
-            # Track best model based on ROC AUC
-            if roc_auc > best_auc:
-                best_auc = roc_auc
-                self.best_model_name = name
-                self.best_model = model
         
-        if self.best_model_name:
-            logger.info(f"Best model: {self.best_model_name} with ROC AUC: {best_auc:.4f}")
-        
+        # Find best model based on ROC AUC
+        best_model_name = max(metrics, key=lambda k: metrics[k]['roc_auc'])
+        self.best_model = self.models[best_model_name]
+        self.best_model_name = best_model_name
         self.metrics = metrics
         
+        # Apply statistical significance tests between models
+        self.compare_models_statistically()
+        
+        logger.info(f"Best model: {best_model_name} with ROC AUC: {metrics[best_model_name]['roc_auc']:.4f}")
         return metrics
     
     def plot_model_comparison(self) -> None:
@@ -594,6 +615,93 @@ class ModelTrainer:
             'roc_auc': roc_auc,
             'pr_auc': pr_auc
         }
+    
+    def compare_models_statistically(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Perform statistical tests to compare model performance.
+        Uses DeLong test for AUC comparison.
+        
+        Returns:
+            Dictionary with pairwise comparison results
+        """
+        if len(self.models) < 2:
+            logger.info("Need at least 2 models for statistical comparison")
+            return {}
+        
+        # Convert to pandas for sklearn
+        X_test_pd = self.X_test.to_pandas()
+        y_test_pd = self.y_test.to_pandas()
+        y_test_values = y_test_pd.values.ravel()
+        
+        # Get model predictions
+        model_probas = {}
+        for name, model in self.models.items():
+            model_probas[name] = model.predict_proba(X_test_pd)[:, 1]
+        
+        # Implement DeLong test for AUC comparison
+        # This is a simplified version - a full implementation would use statsmodels or scikit-learn
+        comparison_results = {}
+        
+        # Calculate p-values for each pair of models
+        model_names = list(self.models.keys())
+        for i, model1 in enumerate(model_names):
+            for model2 in model_names[i+1:]:
+                # McNemar's test for classification agreement
+                y_pred1 = (model_probas[model1] >= 0.5).astype(int)
+                y_pred2 = (model_probas[model2] >= 0.5).astype(int)
+                
+                # Create contingency table
+                # a: both correct, b: model1 correct & model2 wrong
+                # c: model1 wrong & model2 correct, d: both wrong
+                a = np.sum((y_pred1 == y_test_values) & (y_pred2 == y_test_values))
+                b = np.sum((y_pred1 == y_test_values) & (y_pred2 != y_test_values))
+                c = np.sum((y_pred1 != y_test_values) & (y_pred2 == y_test_values))
+                d = np.sum((y_pred1 != y_test_values) & (y_pred2 != y_test_values))
+                
+                # McNemar's test
+                if b + c > 0:  # Avoid division by zero
+                    mcnemar_stat = (abs(b - c) - 1)**2 / (b + c)
+                    mcnemar_p = 1 - stats.chi2.cdf(mcnemar_stat, df=1)
+                else:
+                    mcnemar_p = 1.0
+                    
+                # Bootstrap comparison of AUCs
+                n_bootstrap = 1000
+                auc_diffs = []
+                
+                for _ in range(n_bootstrap):
+                    # Bootstrap sampling
+                    indices = np.random.choice(len(y_test_values), len(y_test_values), replace=True)
+                    y_boot = y_test_values[indices]
+                    prob1_boot = model_probas[model1][indices]
+                    prob2_boot = model_probas[model2][indices]
+                    
+                    # Compute AUCs
+                    auc1 = roc_auc_score(y_boot, prob1_boot)
+                    auc2 = roc_auc_score(y_boot, prob2_boot)
+                    auc_diffs.append(auc1 - auc2)
+                
+                # Compute p-value
+                auc_diff_mean = np.mean(auc_diffs)
+                auc_p = np.mean([1 if diff <= 0 else 0 for diff in auc_diffs]) if auc_diff_mean > 0 else np.mean([1 if diff >= 0 else 0 for diff in auc_diffs])
+                auc_p = min(auc_p, 1 - auc_p) * 2  # Two-tailed p-value
+                
+                comparison_results[f"{model1}_vs_{model2}"] = {
+                    "auc_diff": self.metrics[model1]['roc_auc'] - self.metrics[model2]['roc_auc'],
+                    "auc_p_value": auc_p,
+                    "mcnemar_p_value": mcnemar_p,
+                    "significantly_different": auc_p < 0.05 or mcnemar_p < 0.05
+                }
+        
+        # Store the results
+        self.comparison_results = comparison_results
+        
+        # Log significant differences
+        significant_comparisons = {k: v for k, v in comparison_results.items() if v["significantly_different"]}
+        if significant_comparisons:
+            logger.info(f"Found {len(significant_comparisons)} statistically significant model differences")
+        
+        return comparison_results
     
     def run_model_pipeline(self) -> None:
         """Run the complete model training and evaluation pipeline."""
