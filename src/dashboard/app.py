@@ -24,14 +24,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from src.models.model_explainer import ModelExplainer
 from PIL import Image
 
-# Set page config
-st.set_page_config(
-    page_title="Churn Prediction Dashboard",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
 # Custom CSS
 st.markdown("""
 <style>

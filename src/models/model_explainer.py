@@ -14,10 +14,11 @@ import yaml
 import logging
 from typing import Dict, List, Optional, Union, Any, Tuple
 from pathlib import Path
-from sklearn.inspection import permutation_importance, partial_dependence, plot_partial_dependence
+from sklearn.inspection import permutation_importance, partial_dependence
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 import warnings
+from sklearn.inspection import PartialDependenceDisplay
 
 # Configure logging
 logging.basicConfig(
@@ -690,7 +691,7 @@ class ModelExplainer:
         
         # 5. Create partial dependence plots for top 5 features
         for feature in top_features[:5]:
-            self.plot_partial_dependence(feature)
+            PartialDependenceDisplay.from_estimator(self.model, self.X_test, features=[feature])
         
         # 6. Analyze feature interactions
         interactions = self.analyze_feature_interactions()

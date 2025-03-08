@@ -18,6 +18,7 @@ st.set_page_config(
 )
 
 if __name__ == "__main__":
-    # Import and run the dashboard directly
-    from src.dashboard.app import main
-    main() 
+    # Instead of importing a specific function, just run the dashboard file
+    import runpy
+    # This will execute the dashboard module as __main__
+    runpy.run_module("src.dashboard.app", run_name="__main__") 
