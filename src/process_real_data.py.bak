@@ -1,0 +1,213 @@
+"""
+Process real customer churn data from ARFF format and generate metrics
+"""
+import os
+import json
+import numpy as np
+import pandas as pd
+from scipy.io import arff
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+import sys
+
+# Path to your real ARFF data
+DATA_PATH = "/mnt/hdd/Documents/mobile_churn_66kx66_numeric_nonull"
+
+# Create output directories
+os.makedirs('reports/metrics', exist_ok=True)
+os.makedirs('reports/figures', exist_ok=True)
+
+print(f"Loading ARFF data from: {DATA_PATH}")
+try:
+    # Load and parse the ARFF file
+    data, meta = arff.loadarff(DATA_PATH)
+    # Convert to pandas DataFrame
+    df = pd.DataFrame(data)
+    
+    # Convert byte strings to regular strings (common issue with ARFF files)
+    for col in df.select_dtypes(include=['object']).columns:
+        df[col] = df[col].str.decode('utf-8')
+    
+    print(f"Data loaded successfully: {df.shape[0]} rows, {df.shape[1]} columns")
+    
+    # Find the target column (likely "churn" or similar)
+    target_column = None
+    for col in df.columns:
+        if 'churn' in col.lower():
+            target_column = col
+            break
+    
+    if not target_column:
+        # Default to the last column if we can't find an explicit churn column
+        target_column = df.columns[-1]
+        print(f"No column with 'churn' in name found, using last column: {target_column}")
+    else:
+        print(f"Using '{target_column}' as target column")
+    
+    # Prepare features and target
+    X = df.drop(columns=[target_column])
+    y = df[target_column]
+    
+    # Split the data
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    print(f"Training set: {X_train.shape[0]} rows, Test set: {X_test.shape[0]} rows")
+    
+    # Check if metrics file already exists from main.py processing
+    metrics_file = 'reports/metrics/final_model_metrics.json'
+    if os.path.exists(metrics_file):
+        with open(metrics_file, 'r') as f:
+            try:
+                metrics = json.load(f)
+                # If the file has more than 2 models, it was likely created by main.py
+                if len(metrics.get('metrics', {})) > 2:
+                    print("\n\n===== STOPPING EXECUTION =====")
+                    print(f"Found metrics file with {len(metrics['metrics'])} models.")
+                    print("This was likely created by main.py with the full model set.")
+                    print("To prevent overwriting with simplified models, stopping execution.")
+                    print("===== END WARNING =====\n\n")
+                    sys.exit(0)
+            except:
+                # If we can't read the file, continue as normal
+                pass
+    
+    # Train simple models and generate metrics
+    metrics = {
+        'best_model': None,
+        'metrics': {}
+    }
+    
+    best_auc = 0
+    
+    # Train and evaluate a Random Forest model
+    print("Training Random Forest model...")
+    rf = RandomForestClassifier(n_estimators=100, random_state=42)
+    rf.fit(X_train, y_train)
+    rf_preds = rf.predict(X_test)
+    rf_probs = rf.predict_proba(X_test)[:, 1]
+    
+    rf_metrics = {
+        'accuracy': float(accuracy_score(y_test, rf_preds)),
+        'precision': float(precision_score(y_test, rf_preds, zero_division=0)),
+        'recall': float(recall_score(y_test, rf_preds, zero_division=0)),
+        'f1': float(f1_score(y_test, rf_preds, zero_division=0)),
+        'roc_auc': float(roc_auc_score(y_test, rf_probs)),
+    }
+    metrics['metrics']['random_forest'] = rf_metrics
+    print(f"Random Forest metrics: {rf_metrics}")
+    
+    if rf_metrics['roc_auc'] > best_auc:
+        best_auc = rf_metrics['roc_auc']
+        metrics['best_model'] = 'random_forest'
+    
+    # Train and evaluate a Gradient Boosting model
+    print("Training Gradient Boosting model...")
+    gb = GradientBoostingClassifier(random_state=42)
+    gb.fit(X_train, y_train)
+    gb_preds = gb.predict(X_test)
+    gb_probs = gb.predict_proba(X_test)[:, 1]
+    
+    gb_metrics = {
+        'accuracy': float(accuracy_score(y_test, gb_preds)),
+        'precision': float(precision_score(y_test, gb_preds, zero_division=0)),
+        'recall': float(recall_score(y_test, gb_preds, zero_division=0)),
+        'f1': float(f1_score(y_test, gb_preds, zero_division=0)),
+        'roc_auc': float(roc_auc_score(y_test, gb_probs)),
+    }
+    metrics['metrics']['gradient_boosting'] = gb_metrics
+    print(f"Gradient Boosting metrics: {gb_metrics}")
+    
+    if gb_metrics['roc_auc'] > best_auc:
+        best_auc = gb_metrics['roc_auc']
+        metrics['best_model'] = 'gradient_boosting'
+    
+    # Save model metrics
+    with open('reports/metrics/final_model_metrics.json', 'w') as f:
+        json.dump(metrics, f, indent=4)
+    print("Saved model metrics to reports/metrics/final_model_metrics.json")
+    
+    # Generate feature importance
+    print("Generating feature importance...")
+    best_model = rf if metrics['best_model'] == 'random_forest' else gb
+    
+    # Get feature importance
+    if metrics['best_model'] == 'random_forest':
+        importance = pd.DataFrame({
+            'Feature': X.columns,
+            'Importance': best_model.feature_importances_
+        }).sort_values('Importance', ascending=False)
+    else:
+        importance = pd.DataFrame({
+            'Feature': X.columns,
+            'Importance': best_model.feature_importances_
+        }).sort_values('Importance', ascending=False)
+    
+    importance.to_csv('reports/metrics/feature_importance.csv', index=False)
+    print("Saved feature importance to reports/metrics/feature_importance.csv")
+    
+    # Generate sample explanations with real data
+    print("Generating sample explanations...")
+    explanations = []
+    
+    # Select 5 random test samples
+    sample_indices = np.random.choice(X_test.shape[0], 5, replace=False)
+    
+    for idx in sample_indices:
+        sample = X_test.iloc[idx]
+        actual = y_test.iloc[idx]
+        pred_prob = best_model.predict_proba(sample.values.reshape(1, -1))[0, 1]
+        
+        # Get top 5 features by importance
+        top_features = importance.head(5)['Feature'].values
+        
+        # Create contribution details for each important feature
+        feature_contributions = []
+        for feature in top_features:
+            # Get actual feature contribution from model coefficients or importances
+            if hasattr(best_model, 'feature_importances_'):
+                # For tree-based models
+                feature_idx = list(X.columns).index(feature)
+                importance = best_model.feature_importances_[feature_idx]
+                # Direction of effect based on feature value vs. mean
+                feature_mean = X[feature].mean()
+                feature_val = sample[feature]
+                direction = 1 if feature_val > feature_mean else -1
+                contribution = importance * direction
+            elif hasattr(best_model, 'coef_'):
+                # For linear models
+                feature_idx = list(X.columns).index(feature)
+                contribution = best_model.coef_[0][feature_idx] * sample[feature]
+            else:
+                # If we can't get contribution directly, log it
+                print(f"Warning: Cannot calculate contribution for feature {feature}")
+                contribution = 0
+            
+            feature_contributions.append({
+                "feature": feature,
+                "value": float(sample[feature]) if isinstance(sample[feature], (int, float)) else str(sample[feature]),
+                "contribution": float(contribution)
+            })
+        
+        explanations.append({
+            "sample_id": int(idx),
+            "prediction": float(pred_prob),
+            "actual": int(actual) if hasattr(actual, "__len__") else float(actual),
+            "feature_contributions": feature_contributions
+        })
+    
+    with open('reports/metrics/sample_explanations.json', 'w') as f:
+        json.dump(explanations, f, indent=4)
+    print("Saved sample explanations to reports/metrics/sample_explanations.json")
+    
+    print("\nAll data processing completed successfully!")
+    print("You can now run the dashboard with: streamlit run app.py")
+    
+except Exception as e:
+    print(f"Error processing data: {str(e)}")
+    import traceback
+    traceback.print_exc()
+
+print("\n\n===== WARNING: USING LIMITED MODEL SET IN PROCESS_REAL_DATA.PY =====")
+print("This script only creates RandomForest and GradientBoosting models.")
+print("For the full model set, use main.py directly.")
+print("===== END WARNING =====\n\n") 

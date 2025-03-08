@@ -1,0 +1,162 @@
+[
+    {
+        "sample_id": 12582,
+        "prediction": 0.020639660410283957,
+        "actual": 0.0,
+        "feature_contributions": [
+            {
+                "feature": "user_account_id",
+                "value": 33226.0,
+                "contribution": -0.020371414173413663
+            },
+            {
+                "feature": "user_account_balance_last",
+                "value": 4.38,
+                "contribution": 0.003131392449903691
+            },
+            {
+                "feature": "user_lifetime",
+                "value": 1037.0,
+                "contribution": 0.0026785999524541436
+            },
+            {
+                "feature": "calls_outgoing_count",
+                "value": 122.0,
+                "contribution": 0.0
+            },
+            {
+                "feature": "user_no_outgoing_activity_in_days",
+                "value": 2.0,
+                "contribution": -0.018087358670755116
+            }
+        ]
+    },
+    {
+        "sample_id": 3325,
+        "prediction": 0.01918847880236319,
+        "actual": 0.0,
+        "feature_contributions": [
+            {
+                "feature": "user_account_id",
+                "value": 418014.0,
+                "contribution": -0.010958279476305226
+            },
+            {
+                "feature": "user_account_balance_last",
+                "value": 4.15,
+                "contribution": 0.0018962356326316862
+            },
+            {
+                "feature": "user_lifetime",
+                "value": 664.0,
+                "contribution": 0.00024635866549538657
+            },
+            {
+                "feature": "calls_outgoing_count",
+                "value": 128.0,
+                "contribution": -0.0006478008406328936
+            },
+            {
+                "feature": "user_no_outgoing_activity_in_days",
+                "value": 2.0,
+                "contribution": -0.038654722956204125
+            }
+        ]
+    },
+    {
+        "sample_id": 6454,
+        "prediction": 0.026418665916101595,
+        "actual": 0.0,
+        "feature_contributions": [
+            {
+                "feature": "user_account_id",
+                "value": 41015.0,
+                "contribution": -0.0032228302691106464
+            },
+            {
+                "feature": "user_account_balance_last",
+                "value": 60.73,
+                "contribution": -0.014960459171365296
+            },
+            {
+                "feature": "user_lifetime",
+                "value": 818.0,
+                "contribution": -0.0033933354488838094
+            },
+            {
+                "feature": "calls_outgoing_count",
+                "value": 11.0,
+                "contribution": 0.008607970455172313
+            },
+            {
+                "feature": "user_no_outgoing_activity_in_days",
+                "value": 4.0,
+                "contribution": -0.06877350269879957
+            }
+        ]
+    },
+    {
+        "sample_id": 12806,
+        "prediction": 0.5463493599497813,
+        "actual": 1.0,
+        "feature_contributions": [
+            {
+                "feature": "user_account_id",
+                "value": 23616.0,
+                "contribution": 0.0665962768945953
+            },
+            {
+                "feature": "user_account_balance_last",
+                "value": 0.0,
+                "contribution": 0.04512325189604294
+            },
+            {
+                "feature": "user_lifetime",
+                "value": 15885.0,
+                "contribution": 0.06760576160404574
+            },
+            {
+                "feature": "calls_outgoing_count",
+                "value": 5.0,
+                "contribution": 0.1869902323563032
+            },
+            {
+                "feature": "user_no_outgoing_activity_in_days",
+                "value": 8.0,
+                "contribution": 0.005136158591246165
+            }
+        ]
+    },
+    {
+        "sample_id": 6784,
+        "prediction": 0.027946436813108946,
+        "actual": 0.0,
+        "feature_contributions": [
+            {
+                "feature": "user_account_id",
+                "value": 363418.0,
+                "contribution": -0.00024220131746676213
+            },
+            {
+                "feature": "user_account_balance_last",
+                "value": 0.1,
+                "contribution": 0.023861520272940452
+            },
+            {
+                "feature": "user_lifetime",
+                "value": 1131.0,
+                "contribution": 0.0
+            },
+            {
+                "feature": "calls_outgoing_count",
+                "value": 48.0,
+                "contribution": 0.0
+            },
+            {
+                "feature": "user_no_outgoing_activity_in_days",
+                "value": 1.0,
+                "contribution": -0.0697821035367528
+            }
+        ]
+    }
+]

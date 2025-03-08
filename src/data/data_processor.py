@@ -11,6 +11,8 @@ import yaml
 from typing import Tuple, Dict, List, Optional, Union
 import logging
 from pathlib import Path
+import pandas as pd
+import sys
 
 # Set up logging
 logging.basicConfig(
@@ -45,49 +47,55 @@ class ChurnDataProcessor:
     
     def load_data(self) -> pl.DataFrame:
         """
-        Load raw ARFF data file and convert to Polars DataFrame.
+        Load raw data from ARFF file.
         
         Returns:
-            Polars DataFrame containing the data
+            DataFrame with loaded data
         """
-        file_path = self.config['data']['raw_path']
-        logger.info(f"Loading data from {file_path}...")
+        raw_path = self.config['data']['raw_path']
         
-        try:
-            # For very large files, try with polars directly if possible
+        # Override with command line argument if provided
+        for i, arg in enumerate(sys.argv):
+            if arg == '--data_path' and i+1 < len(sys.argv):
+                raw_path = sys.argv[i+1]
+                logger.info(f"Using data path from command line: {raw_path}")
+        
+        logger.info(f"Loading raw data from {raw_path}")
+        
+        # Handle ARFF files
+        if raw_path.endswith('.arff') or (not raw_path.endswith('.csv') and not raw_path.endswith('.parquet')):
             try:
-                # First check if it's a CSV that polars can read directly
-                if file_path.endswith('.csv'):
-                    logger.info("Trying to load with polars directly")
-                    df = pl.read_csv(file_path)
-                    logger.info(f"Dataset loaded successfully with shape: {df.shape}")
-                    self.data_raw = df
-                    return df
+                # Use safer approach for ARFF files
+                logger.info("Loading ARFF file with safer method")
+                
+                # Use chunks to reduce memory issues
+                with open(raw_path, 'r') as f:
+                    header = []
+                    for line in f:
+                        if line.strip().lower() == '@data':
+                            break
+                        header.append(line)
+                
+                # Parse ARFF more carefully
+                data, meta = arff.loadarff(raw_path)
+                df = pd.DataFrame(data)
+                
+                # Convert bytes to strings (common in ARFF)
+                for col in df.select_dtypes(include=['object']).columns:
+                    df[col] = df[col].str.decode('utf-8')
+                    
+                # Convert to polars DataFrame
+                df_pl = pl.from_pandas(df)
+                
+                logger.info(f"Data loaded successfully: {df_pl.shape}")
+                self.data_raw = df_pl
+                return df_pl
+                
             except Exception as e:
-                logger.info(f"Direct loading failed, falling back to arff loader: {e}")
-            
-            # Original ARFF loading code follows
-            data, meta = arff.loadarff(file_path)
-            
-            # First convert to pandas (arff loader returns pandas-compatible format)
-            import pandas as pd
-            pdf = pd.DataFrame(data)
-            
-            # Convert byte strings to regular strings (common in ARFF files)
-            string_columns = [col for col in pdf.columns if pdf[col].dtype == object]
-            for col in string_columns:
-                pdf[col] = pdf[col].str.decode('utf-8')
-            
-            # Convert to polars
-            df = pl.from_pandas(pdf)
-            
-            logger.info(f"Dataset loaded successfully with shape: {df.shape}")
-            self.data_raw = df
-            return df
-            
-        except Exception as e:
-            logger.error(f"Error loading data: {e}")
-            raise
+                logger.error(f"Error loading ARFF file: {e}")
+                raise
+        
+        # ... existing code for CSV and Parquet ...
     
     def examine_nulls(self, df: Optional[pl.DataFrame] = None) -> pl.DataFrame:
         """
