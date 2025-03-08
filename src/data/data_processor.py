@@ -182,9 +182,71 @@ class ChurnDataProcessor:
             
         return summary_df
     
+    def identify_exclude_columns(self, df: pl.DataFrame) -> List[str]:
+        """
+        Identify columns that should be excluded from modeling like IDs,
+        timestamps, and other non-predictive columns.
+        
+        Args:
+            df: DataFrame to analyze
+            
+        Returns:
+            List of column names to exclude
+        """
+        exclude_columns = []
+        
+        # 1. Get column names from config (if specified)
+        config_excludes = self.config.get('preprocessing', {}).get('exclude_columns', [])
+        if config_excludes:
+            exclude_columns.extend(config_excludes)
+            logger.info(f"Excluding columns specified in config: {config_excludes}")
+        
+        # 2. Find potential ID columns by name pattern
+        id_patterns = ['id', 'customer', 'account', 'record', 'number', 'uuid', 'guid']
+        pattern_matches = [col for col in df.columns if any(
+            pattern.lower() in col.lower() for pattern in id_patterns
+        )]
+        
+        if pattern_matches:
+            logger.info(f"Found potential ID columns: {pattern_matches}")
+            exclude_columns.extend(pattern_matches)
+        
+        # 3. Find columns with unique or near-unique values (possible IDs)
+        for col in df.columns:
+            # Skip columns already marked for exclusion
+            if col in exclude_columns:
+                continue
+            
+            # Check numerical columns for high cardinality
+            if df[col].dtype in [pl.Int64, pl.Int32, pl.Int16, pl.Int8]:
+                # Get count of unique values
+                unique_count = df[col].n_unique()
+                
+                # If unique values > 95% of total rows, likely an ID
+                if unique_count > 0.95 * df.height:
+                    logger.warning(f"Column '{col}' has {unique_count} unique values "
+                                  f"({unique_count/df.height:.2%} of rows), likely an ID or unique identifier")
+                    exclude_columns.append(col)
+        
+        # 4. Check for timestamp/date columns
+        date_patterns = ['date', 'time', 'created', 'modified', 'timestamp']
+        potential_timestamps = [col for col in df.columns if any(
+            pattern.lower() in col.lower() for pattern in date_patterns
+        )]
+        
+        if potential_timestamps:
+            logger.info(f"Found potential timestamp columns: {potential_timestamps}")
+            exclude_columns.extend(potential_timestamps)
+        
+        # De-duplicate the list
+        exclude_columns = list(set(exclude_columns))
+        
+        logger.info(f"Total {len(exclude_columns)} columns marked for exclusion")
+        return exclude_columns
+    
     def preprocess_data(self, df: Optional[pl.DataFrame] = None) -> pl.DataFrame:
         """
-        Preprocess the data: handle missing values, outliers, etc.
+        Preprocess the data: handle missing values, outliers, remove ID columns, etc.
         
         Args:
             df: DataFrame to process (uses self.data_raw if None)
@@ -202,6 +264,15 @@ class ChurnDataProcessor:
         
         # Make a copy to avoid modifying the original
         processed_df = df.clone()
+        
+        # Identify and remove columns that shouldn't be used for modeling
+        exclude_columns = self.identify_exclude_columns(processed_df)
+        
+        # Log the columns being removed
+        if exclude_columns:
+            logger.info(f"Removing the following columns from modeling: {exclude_columns}")
+            processed_df = processed_df.drop(exclude_columns)
+            logger.info(f"Data shape after removing excluded columns: {processed_df.shape}")
         
         # 1. Handle potential null placeholders
         null_info = self.examine_nulls(processed_df)

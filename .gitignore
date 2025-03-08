@@ -1,0 +1,32 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Log files
+*.log
+
+# Temporary files
+temp_*
+*.tmp
+*.arff
+
+# Data files (if large)
+data/raw/*
+!data/raw/.gitkeep
+
+# Model files (if large)
+models/*.joblib
+models/*.pkl
+
+# IDE files
+.vscode/
+.idea/
+
+# OS specific
+.DS_Store 
