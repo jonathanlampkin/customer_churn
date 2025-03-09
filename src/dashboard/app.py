@@ -867,6 +867,36 @@ def display_overview():
     workflow_df = pd.DataFrame(workflow_data)
     st.dataframe(workflow_df.set_index('Phase'), use_container_width=True)
 
+def setup_sidebar():
+    """Set up the sidebar elements for the dashboard"""
+    st.sidebar.title("Customer Churn Analysis")
+    
+    # Add logo or image if available
+    # st.sidebar.image("path/to/logo.png", width=200)
+    
+    # Add description 
+    st.sidebar.markdown("""
+    ## About
+    This dashboard visualizes churn prediction results and provides insights into customer behavior.
+    """)
+    
+    # Add filtering options if needed
+    # st.sidebar.subheader("Filters")
+    # filter_option = st.sidebar.selectbox("Filter by:", ["All Data", "High Risk", "Low Risk"])
+    
+    # Add download section in the sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Download Resources")
+    st.sidebar.markdown("- [Project Report (PDF)](dummy_link)")
+    st.sidebar.markdown("- [Model Documentation](dummy_link)")
+    
+    # Add additional sidebar widgets as needed
+    
+    # Add metrics refresh button
+    st.sidebar.markdown("---")
+    if st.sidebar.button("Refresh Metrics"):
+        st.experimental_rerun()
+
 def main():
     setup_sidebar()
     
@@ -935,13 +965,6 @@ def main():
         "This dashboard visualizes the results of a machine learning model "
         "trained to predict customer churn."
     )
-
-    # Add a download section in the sidebar
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### Download Resources")
-    st.sidebar.markdown("- [Project Report (PDF)](dummy_link)")
-    st.sidebar.markdown("- [Model Documentation](dummy_link)")
-    st.sidebar
 
     # Use these calculations in the dashboard
     churn_rate, estimated_savings = calculate_business_metrics(metrics)
