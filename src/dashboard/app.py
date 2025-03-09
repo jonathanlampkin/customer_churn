@@ -18,6 +18,15 @@ from pathlib import Path
 import argparse
 from plotly.subplots import make_subplots
 
+# Set page config as the very first Streamlit command
+# This must be the first st. call in the file
+st.set_page_config(
+    page_title="Customer Churn Prediction Dashboard",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -859,14 +868,6 @@ def display_overview():
     st.dataframe(workflow_df.set_index('Phase'), use_container_width=True)
 
 def main():
-    # Set page config
-    st.set_page_config(
-        page_title="Customer Churn Prediction Dashboard",
-        page_icon="📊",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-    
     setup_sidebar()
     
     # Load data

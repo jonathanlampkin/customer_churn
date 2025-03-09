@@ -2,6 +2,17 @@
 Customer Churn Prediction Dashboard - All-in-One Solution
 Handles data processing, model training, and visualization in one file.
 """
+import streamlit as st
+
+# MUST BE THE FIRST STREAMLIT COMMAND
+st.set_page_config(
+    page_title="Customer Churn Prediction Dashboard",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Now import everything else
 import os
 import sys
 import time
@@ -9,7 +20,6 @@ import json
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import streamlit as st
 from scipy.io import arff
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, StackingClassifier
@@ -86,14 +96,6 @@ else:
     DEFAULT_DATA_PATH = "/mnt/hdd/churn_project/data/churn_data.arff"
 
 # Custom theme and styling
-st.set_page_config(
-    page_title="Customer Churn Analysis",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# Add custom CSS for beautiful UI
 st.markdown("""
 <style>
     /* Main containers */
