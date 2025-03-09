@@ -1038,10 +1038,6 @@ def display_overview():
 
 def setup_sidebar():
     """Set up the sidebar elements for the dashboard"""
-    # Add filtering options if needed
-    # st.sidebar.subheader("Filters")
-    # filter_option = st.sidebar.selectbox("Filter by:", ["All Data", "High Risk", "Low Risk"])
-    
     # Navigation
     st.sidebar.title("Navigation")
     page = st.sidebar.radio("Go to", [
@@ -1058,9 +1054,12 @@ def setup_sidebar():
     st.sidebar.markdown("### Download Resources")
     st.sidebar.markdown("- [Project Report (PDF)](dummy_link)")
     st.sidebar.markdown("- [Model Documentation](dummy_link)")
+    
+    return page  # Return the selected page
 
 def main():
-    setup_sidebar()
+    # Get the selected page from sidebar
+    page = setup_sidebar()
     
     # Load data
     metrics = load_model_metrics()
@@ -1085,23 +1084,8 @@ def main():
         ```
         """)
     
-    # Display based on selection
-    page = st.session_state.get("page", "Overview")
-    
     # Header
     st.markdown('<div class="main-header">Churn Prediction Dashboard</div>', unsafe_allow_html=True)
-    
-    # Sidebar - navigation is handled in the setup_sidebar function
-    
-    # Display based on selection
-    page = st.sidebar.radio("Go to", [
-        "Overview", 
-        "Exploratory Data Analysis",
-        "Model Performance", 
-        "Feature Importance", 
-        "Prediction Explanations",
-        "Advanced Techniques"
-    ])
     
     # Display based on selection
     if page == "Overview":
