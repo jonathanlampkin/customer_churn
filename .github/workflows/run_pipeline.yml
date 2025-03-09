@@ -14,6 +14,7 @@ jobs:
       uses: actions/checkout@v3
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        persist-credentials: true
     
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -57,12 +58,9 @@ jobs:
         echo "{\"status\":\"completed\",\"timestamp\":\"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"}" > reports/pipeline_status.json
         
     - name: Commit and push changes
-      run: |
-        git config --global user.name 'GitHub Actions Bot'
-        git config --global user.email 'actions@github.com'
-        git add reports/metrics/*.json reports/pipeline_status.json
-        git add reports/metrics/*.csv || true
-        git add reports/figures/*.png || true
-        git commit -m "Update metrics and visualizations [skip ci]" || echo "No changes to commit"
-        git remote set-url origin https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }}
-        git push 
+      uses: EndBug/add-and-commit@v9
+      with:
+        message: 'Update metrics and visualizations [skip ci]'
+        add: 'reports/metrics reports/figures reports/pipeline_status.json'
+        default_author: github_actions
+        github_token: ${{ secrets.GITHUB_TOKEN }} 
