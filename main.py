@@ -12,7 +12,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Now import everything else
+# Import everything else
 import os
 import sys
 import time
@@ -41,7 +41,15 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 import io
 
-# Enhanced logging setup
+# Suppress warnings
+warnings.filterwarnings('ignore')
+
+# Create necessary directories
+os.makedirs('reports/metrics', exist_ok=True)
+os.makedirs('reports/figures', exist_ok=True)
+os.makedirs('data/interim', exist_ok=True)
+
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
@@ -77,23 +85,6 @@ def read_logs(num_lines=100):
             return lines[-num_lines:] if len(lines) > num_lines else lines
     except Exception as e:
         return [f"Error reading log file: {str(e)}"]
-
-# Suppress warnings
-warnings.filterwarnings('ignore')
-
-# Create necessary directories
-os.makedirs('reports/metrics', exist_ok=True)
-os.makedirs('reports/figures', exist_ok=True)
-os.makedirs('data/interim', exist_ok=True)
-
-# Define data path handling based on environment
-if os.environ.get('GITHUB_ACTIONS'):
-    # Use the actual dataset file in the repository (appears to be CSV)
-    DEFAULT_DATA_PATH = "data/full_dataset/mobile_churn_66kx66_numeric_nonull"
-    pipeline_logger.info("Running in GitHub Actions environment with complete dataset")
-else:
-    # For local development, use the path provided
-    DEFAULT_DATA_PATH = "/mnt/hdd/churn_project/data/churn_data.arff"
 
 # Custom theme and styling
 st.markdown("""
