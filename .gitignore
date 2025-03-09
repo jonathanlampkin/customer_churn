@@ -16,9 +16,14 @@ temp_*
 *.tmp
 *.arff
 
-# Data files (if large)
+# Data files (update to exclude only large raw data files)
 data/raw/*
 !data/raw/.gitkeep
+
+# Keep important generated files
+!reports/metrics/*.json
+!reports/metrics/*.csv
+!reports/figures/*.png
 
 # Model files (if large)
 models/*.joblib
@@ -29,4 +34,12 @@ models/*.pkl
 .idea/
 
 # OS specific
-.DS_Store 
+.DS_Store
+
+# Keep the sample data
+!data/sample/churn_sample.csv
+
+# Ensure metrics and figures are committed
+!reports/metrics/*.json
+!reports/metrics/*.csv
+!reports/figures/*.png 
