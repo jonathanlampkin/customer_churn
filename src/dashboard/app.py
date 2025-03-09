@@ -392,84 +392,113 @@ def display_feature_importance(importance_df):
         use_container_width=True
     )
 
-def display_sample_explanations(explanations):
+def display_sample_explanations(sample_explanations):
     """Display sample prediction explanations"""
     st.markdown('<div class="section-header">Prediction Explanations</div>', unsafe_allow_html=True)
     
-    if not explanations:
+    if not sample_explanations:
         st.warning("No sample explanations available.")
         return
     
     st.write("These examples show how the model makes predictions for specific customers.")
     
-    # Select which sample to display
-    sample_idx = st.selectbox("Select a sample to explain:", 
-                             range(len(explanations)), 
-                             format_func=lambda i: f"Sample {i+1} - " + 
-                             ("Churned" if explanations[i]['prediction']['actual_class'] == 1 else "Did not churn"))
-    
-    if sample_idx is not None and 0 <= sample_idx < len(explanations):
-        explanation = explanations[sample_idx]
-        
-        # Sample information
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Prediction")
+    # Fix the error in the selectbox by adding error handling
+    try:
+        # Make sure sample_explanations is not empty
+        if not sample_explanations or len(sample_explanations) == 0:
+            st.warning("No sample explanations available.")
+            return
             
-            actual = explanation['prediction']['actual_class']
-            predicted = explanation['prediction']['predicted_class']
-            probability = explanation['prediction']['probability']
-            correct = explanation['prediction']['correct']
-            
-            st.markdown(f"""
-            - **Actual outcome**: {'Churned' if actual == 1 else 'Did not churn'}
-            - **Predicted outcome**: {'Churned' if predicted == 1 else 'Did not churn'} (Confidence: {probability:.2%})
-            - **Prediction was**: {'Correct ✓' if correct else 'Incorrect ✗'}
-            """)
+        # Create a safer format function that handles missing keys
+        def format_func(i):
+            try:
+                if 'prediction' in sample_explanations[i] and 'actual_class' in sample_explanations[i]['prediction']:
+                    churn_status = "Churned" if sample_explanations[i]['prediction']['actual_class'] == 1 else "Did not churn"
+                    return f"Customer {i+1} ({churn_status})"
+                else:
+                    return f"Customer {i+1}"
+            except (IndexError, KeyError, TypeError):
+                return f"Customer {i+1}"
         
-        with col2:
-            st.subheader("Key Factors")
-            
-            # Display top positive and negative features
-            pos_features = explanation.get('top_positive_features', [])
-            neg_features = explanation.get('top_negative_features', [])
-            
-            if pos_features:
-                st.markdown("**Factors increasing churn probability:**")
-                for i, feature in enumerate(pos_features[:3]):
-                    st.markdown(f"""
-                    <div class="feature-importance-item" style="background-color: rgba(255,152,150,{min(abs(feature['shap_value'])*5, 0.9)})">
-                        {i+1}. {feature['feature']}: {feature['value']}
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-            if neg_features:
-                st.markdown("**Factors decreasing churn probability:**")
-                for i, feature in enumerate(neg_features[:3]):
-                    st.markdown(f"""
-                    <div class="feature-importance-item" style="background-color: rgba(152,223,138,{min(abs(feature['shap_value'])*5, 0.9)})">
-                        {i+1}. {feature['feature']}: {feature['value']}
-                    </div>
-                    """, unsafe_allow_html=True)
+        sample_idx = st.selectbox(
+            "Select a sample to explain:",
+            options=range(len(sample_explanations)),
+            format_func=format_func
+        )
         
-        # Visualization
-        st.subheader("Visualization of Feature Impacts")
-        
-        # Force plot image
-        if 'visualizations' in explanation and 'force_plot' in explanation['visualizations']:
-            force_plot_path = explanation['visualizations']['force_plot']
-            if os.path.exists(force_plot_path):
-                st.image(force_plot_path, caption="Force Plot - Shows how each feature contributes to the prediction")
-        
-        # Decision plot
-        if 'visualizations' in explanation and 'decision_plot' in explanation['visualizations']:
-            decision_plot_path = explanation['visualizations']['decision_plot']
-            if os.path.exists(decision_plot_path):
-                st.image(decision_plot_path, caption="Decision Plot - Shows the path to the final prediction")
+        # Display the explanation for the selected sample
+        if sample_idx is not None and sample_idx < len(sample_explanations):
+            explanation = sample_explanations[sample_idx]
+            
+            # Sample information
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("Prediction")
+                
+                actual = explanation['prediction']['actual_class']
+                predicted = explanation['prediction']['predicted_class']
+                probability = explanation['prediction']['probability']
+                correct = explanation['prediction']['correct']
+                
+                st.markdown(f"""
+                - **Actual outcome**: {'Churned' if actual == 1 else 'Did not churn'}
+                - **Predicted outcome**: {'Churned' if predicted == 1 else 'Did not churn'} (Confidence: {probability:.2%})
+                - **Prediction was**: {'Correct ✓' if correct else 'Incorrect ✗'}
+                """)
+            
+            with col2:
+                st.subheader("Key Factors")
+                
+                # Display top positive and negative features
+                pos_features = explanation.get('top_positive_features', [])
+                neg_features = explanation.get('top_negative_features', [])
+                
+                if pos_features:
+                    st.markdown("**Factors increasing churn probability:**")
+                    for i, feature in enumerate(pos_features[:3]):
+                        st.markdown(f"""
+                        <div class="feature-importance-item" style="background-color: rgba(255,152,150,{min(abs(feature['shap_value'])*5, 0.9)})">
+                            {i+1}. {feature['feature']}: {feature['value']}
+                        </div>
+                        """, unsafe_allow_html=True)
+                
+                if neg_features:
+                    st.markdown("**Factors decreasing churn probability:**")
+                    for i, feature in enumerate(neg_features[:3]):
+                        st.markdown(f"""
+                        <div class="feature-importance-item" style="background-color: rgba(152,223,138,{min(abs(feature['shap_value'])*5, 0.9)})">
+                            {i+1}. {feature['feature']}: {feature['value']}
+                        </div>
+                        """, unsafe_allow_html=True)
+            
+            # Visualization
+            st.subheader("Visualization of Feature Impacts")
+            
+            # Force plot image
+            if 'visualizations' in explanation and 'force_plot' in explanation['visualizations']:
+                force_plot_path = explanation['visualizations']['force_plot']
+                if os.path.exists(force_plot_path):
+                    st.image(force_plot_path, caption="Force Plot - Shows how each feature contributes to the prediction")
+            
+            # Decision plot
+            if 'visualizations' in explanation and 'decision_plot' in explanation['visualizations']:
+                decision_plot_path = explanation['visualizations']['decision_plot']
+                if os.path.exists(decision_plot_path):
+                    st.image(decision_plot_path, caption="Decision Plot - Shows the path to the final prediction")
+    except Exception as e:
+        st.error(f"Error displaying sample explanations: {str(e)}")
+        print(f"Error in display_sample_explanations: {str(e)}")
 
 def display_eda():
     st.markdown('<div class="section-header">Exploratory Data Analysis</div>', unsafe_allow_html=True)
+    
+    # Load the actual data
+    df = load_original_data()
+    
+    if df is None:
+        st.error("Cannot display EDA without data. Please ensure the dataset is available.")
+        return
     
     # Create tabs for different EDA aspects
     eda_tab1, eda_tab2, eda_tab3 = st.tabs(["Feature Distributions", "Correlations & Patterns", "Class Imbalance"])
@@ -477,86 +506,106 @@ def display_eda():
     with eda_tab1:
         st.subheader("Distribution of Key Features")
         
-        # Create example distribution plots
-        fig = go.Figure()
-        x_data = np.random.normal(65, 15, 1000)  # Monthly charges
-        fig.add_trace(go.Histogram(x=x_data, name="Monthly Charges"))
+        # Use real data for distribution plots
+        if 'monthly_charges' in df.columns:
+            fig = go.Figure()
+            fig.add_trace(go.Histogram(x=df['monthly_charges'], name="Monthly Charges"))
+            
+            fig.update_layout(
+                title="Distribution of Monthly Charges",
+                xaxis_title="Monthly Charges ($)",
+                yaxis_title="Count",
+                bargap=0.1
+            )
+            st.plotly_chart(fig, use_container_width=True)
         
-        fig.update_layout(
-            title="Distribution of Monthly Charges",
-            xaxis_title="Monthly Charges ($)",
-            yaxis_title="Count",
-            bargap=0.1
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Another example
-        fig2 = go.Figure()
-        x_data2 = np.random.gamma(2, 10, 1000)  # Tenure
-        fig2.add_trace(go.Histogram(x=x_data2, name="Tenure"))
-        
-        fig2.update_layout(
-            title="Distribution of Customer Tenure",
-            xaxis_title="Tenure (Months)",
-            yaxis_title="Count",
-            bargap=0.1
-        )
-        st.plotly_chart(fig2, use_container_width=True)
+        # Another example with real data
+        if 'tenure_months' in df.columns:
+            fig2 = go.Figure()
+            fig2.add_trace(go.Histogram(x=df['tenure_months'], name="Tenure"))
+            
+            fig2.update_layout(
+                title="Distribution of Customer Tenure",
+                xaxis_title="Tenure (Months)",
+                yaxis_title="Count",
+                bargap=0.1
+            )
+            st.plotly_chart(fig2, use_container_width=True)
     
     with eda_tab2:
         st.subheader("Feature Correlations")
         
-        # Create a correlation heatmap
-        corr_data = pd.DataFrame(
-            np.random.rand(8, 8), 
-            columns=["Monthly Charges", "Tenure", "Total Charges", "Dependents", 
-                     "Online Security", "Tech Support", "Contract Type", "Churn"]
-        )
-        corr_matrix = corr_data.corr()
-        
-        fig = px.imshow(
-            corr_matrix, 
-            text_auto=True, 
-            color_continuous_scale='RdBu_r',
-            title="Feature Correlation Matrix"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        st.markdown("""
-        👆 **Key Insight**: The correlation matrix reveals strong relationships between:
-        - Monthly charges and churn (positive correlation)
-        - Tenure and churn (negative correlation)
-        - Contract type and churn (negative correlation)
-        """)
+        # Create a correlation heatmap with real data
+        # Select only numeric columns
+        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+        if len(numeric_cols) > 1:  # Need at least 2 numeric columns for correlation
+            corr_matrix = df[numeric_cols].corr()
+            
+            # Remove the top triangle from the correlation matrix
+            fig, ax = plt.subplots(figsize=(10, 8))
+            mask = np.triu(np.ones_like(corr_matrix, dtype=bool))  # Create a mask for the upper triangle
+            sns.heatmap(corr_matrix, mask=mask, annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5, ax=ax)
+            plt.title("Feature Correlation Matrix")
+            st.pyplot(fig)
+            
+            # Find strongest correlations with churn
+            if 'churn' in numeric_cols:
+                churn_corrs = corr_matrix['churn'].sort_values(ascending=False)
+                st.markdown("""
+                👆 **Key Insight**: The correlation matrix reveals strong relationships between:
+                """)
+                for feature, corr in churn_corrs.items():
+                    if feature != 'churn' and abs(corr) > 0.1:  # Only show meaningful correlations
+                        direction = "positive" if corr > 0 else "negative"
+                        st.markdown(f"- {feature} and churn ({direction} correlation: {corr:.2f})")
+        else:
+            st.warning("Not enough numeric columns in the dataset to create a correlation matrix.")
     
     with eda_tab3:
         st.subheader("Class Imbalance Analysis")
         
-        # Create class imbalance visualization
-        fig = go.Figure()
-        labels = ['Not Churned (73%)', 'Churned (27%)']
-        values = [73, 27]
-        colors = ['rgb(71, 181, 255)', 'rgb(255, 102, 102)']
-        
-        fig.add_trace(go.Pie(
-            labels=labels,
-            values=values,
-            hole=.4,
-            marker_colors=colors
-        ))
-        
-        fig.update_layout(
-            title_text="Target Class Distribution",
-            annotations=[dict(text='Imbalanced<br>Dataset', x=0.5, y=0.5, font_size=15, showarrow=False)]
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        st.markdown("""
-        **How we addressed class imbalance:**
-        - Weighted class approach
-        - Synthetic Minority Over-sampling Technique (SMOTE)
-        - Evaluation metrics optimized for imbalanced data (F1, ROC-AUC, PR-AUC)
-        """)
+        # Create class imbalance visualization with real data
+        if 'churn' in df.columns:
+            # Calculate actual churn distribution
+            churn_counts = df['churn'].value_counts(normalize=True) * 100
+            not_churned = churn_counts.get(False, 0) if isinstance(churn_counts.index[0], bool) else churn_counts.get(0, 0)
+            churned = churn_counts.get(True, 0) if isinstance(churn_counts.index[0], bool) else churn_counts.get(1, 0)
+            
+            fig = go.Figure()
+            labels = [f'Not Churned ({not_churned:.1f}%)', f'Churned ({churned:.1f}%)']
+            values = [not_churned, churned]
+            colors = ['rgb(71, 181, 255)', 'rgb(255, 102, 102)']
+            
+            fig.add_trace(go.Pie(
+                labels=labels,
+                values=values,
+                hole=.4,
+                marker_colors=colors
+            ))
+            
+            fig.update_layout(
+                title_text="Target Class Distribution",
+                annotations=[dict(text='Class<br>Distribution', x=0.5, y=0.5, font_size=15, showarrow=False)]
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Log the actual values used
+            print(f"Churn Distribution: Not Churned = {not_churned:.1f}%, Churned = {churned:.1f}%")
+            
+            # Calculate and display class imbalance ratio
+            imbalance_ratio = max(not_churned, churned) / min(not_churned, churned)
+            st.markdown(f"""
+            **Class Imbalance Analysis:**
+            - Not Churned: {not_churned:.1f}%
+            - Churned: {churned:.1f}%
+            - Imbalance Ratio: {imbalance_ratio:.1f}:1
+            
+            **How we addressed class imbalance:**
+            - Weighted class approach
+            - Evaluation metrics optimized for imbalanced data (F1, ROC-AUC, PR-AUC)
+            """)
+        else:
+            st.warning("Churn column not found in the dataset. Cannot display class distribution.")
 
 def display_advanced_techniques():
     st.markdown('<div class="section-header">Advanced ML Techniques</div>', unsafe_allow_html=True)
@@ -719,68 +768,133 @@ def display_advanced_techniques():
         - GPU acceleration for final model training
         """)
 
-def calculate_business_metrics(metrics):
-    """Calculate business metrics from real model performance"""
-    if not metrics or 'metrics' not in metrics or metrics.get('best_model') not in metrics['metrics']:
-        return None, None
+def display_business_impact():
+    """Display business impact calculator with real data only"""
+    st.markdown('<div class="section-header">Business Impact Calculator</div>', unsafe_allow_html=True)
     
-    # Extract real model performance
-    best_model = metrics.get('best_model')
-    model_metrics = metrics['metrics'][best_model]
+    # Load the actual data
+    df = load_original_data()
     
-    # Get user inputs for business calculations
-    with st.sidebar:
-        st.subheader("Business Impact Calculator")
-        st.write("Adjust these values to calculate potential savings")
+    if df is None or 'user_account_id' not in df.columns or 'churn' not in df.columns or 'monthly_charges' not in df.columns:
+        st.error("""
+        ## ⚠️ Required data not available
         
+        The Business Impact Calculator needs a dataset with the following columns:
+        - user_account_id
+        - churn
+        - monthly_charges
+        
+        Please ensure your data contains these columns and run the data processing pipeline.
+        """)
+        return
+    
+    # Calculate actual metrics from the data
+    distinct_users = df['user_account_id'].nunique()
+    churned_users = df[df['churn'] == True]['user_account_id'].nunique()
+    churn_rate = churned_users / distinct_users
+    
+    # Calculate average monthly charge
+    avg_monthly_charge = df.groupby('user_account_id')['monthly_charges'].first().mean()
+    avg_annual_value = avg_monthly_charge * 12
+    
+    # Display the calculator
+    st.markdown("### Business Impact Calculator")
+    st.markdown("Estimate the financial impact of reducing customer churn with our model.")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
         avg_customer_value = st.number_input(
             "Average Annual Customer Value ($)",
-            min_value=0,
-            value=1000,
-            help="The average annual revenue generated by a customer"
+            min_value=0.0,
+            value=float(avg_annual_value),
+            step=100.0,
+            format="%.2f"
         )
-        
-        num_customers = st.number_input(
-            "Total Number of Customers",
+    
+    with col2:
+        total_customers = st.number_input(
+            "Total Customers",
             min_value=0,
-            value=10000,
-            help="Total customer base size"
+            value=int(distinct_users),
+            step=100
         )
-        
-        intervention_success_rate = st.slider(
-            "Intervention Success Rate (%)",
+    
+    with col3:
+        retention_improvement = st.slider(
+            "Expected Retention Improvement (%)",
             min_value=0,
             max_value=100,
             value=30,
-            help="Percentage of identified churners that can be retained through intervention"
-        ) / 100
+            step=5
+        )
     
-    # Get the churn rate from test data
-    # FIX: Load the test data y values to calculate actual churn rate
-    try:
-        # Try to load y_test from interim data
-        y_test_path = 'data/interim/y_test.csv'
-        if os.path.exists(y_test_path):
-            y_test = pd.read_csv(y_test_path)
-            target_col = y_test.columns[0]  # Assuming first column is target
-            churn_rate = y_test[target_col].mean()
+    # Calculate the impact
+    current_churn_cost = avg_customer_value * total_customers * churn_rate
+    improved_churn_rate = churn_rate * (1 - retention_improvement / 100)
+    improved_churn_cost = avg_customer_value * total_customers * improved_churn_rate
+    potential_savings = current_churn_cost - improved_churn_cost
+    
+    # Display results
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric(
+            "Churn Rate", 
+            f"{churn_rate:.1%}",
+            help="Number of distinct users who churned divided by total distinct users"
+        )
+        # Log the calculation for transparency
+        print(f"Churn Rate Calculation: {churned_users} churned users / {distinct_users} total users = {churn_rate:.4f}")
+    
+    with col2:
+        # Format large numbers with K/M suffix
+        annual_revenue_loss = avg_customer_value * total_customers * churn_rate
+        if annual_revenue_loss >= 1e6:
+            formatted_loss = f"${annual_revenue_loss/1e6:.1f}M"
+        elif annual_revenue_loss >= 1e3:
+            formatted_loss = f"${annual_revenue_loss/1e3:.0f}K"
         else:
-            # Fallback to a reasonable default based on model metrics
-            churn_rate = 0.15  # Typical churn rate if data unavailable
-            st.warning("Using estimated churn rate of 15% (real data not found)")
-    except Exception as e:
-        st.warning(f"Couldn't calculate actual churn rate: {str(e)}")
-        churn_rate = 0.15
+            formatted_loss = f"${annual_revenue_loss:.0f}"
+        
+        st.metric(
+            "Annual Revenue Loss",
+            formatted_loss,
+            help="Average customer value × Total customers × Churn rate"
+        )
+        # Log the calculation for transparency
+        print(f"Annual Revenue Loss Calculation: ${avg_customer_value:.2f} × {total_customers} × {churn_rate:.4f} = ${annual_revenue_loss:.2f}")
     
-    # Calculate metrics from real data
-    true_positive_rate = model_metrics.get('recall', 0.0)
+    with col3:
+        # Format with K/M suffix
+        if potential_savings >= 1e6:
+            formatted_savings = f"${potential_savings/1e6:.1f}M"
+        elif potential_savings >= 1e3:
+            formatted_savings = f"${potential_savings/1e3:.0f}K"
+        else:
+            formatted_savings = f"${potential_savings:.0f}"
+            
+        st.metric(
+            "Potential Annual Savings",
+            formatted_savings,
+            help=f"Estimated savings with {retention_improvement}% churn reduction"
+        )
+        # Log the calculation for transparency
+        print(f"Potential Annual Savings Calculation: ${current_churn_cost:.2f} - ${improved_churn_cost:.2f} = ${potential_savings:.2f}")
     
-    churn_customers = int(num_customers * churn_rate)
-    identified_customers = int(churn_customers * true_positive_rate)
-    saved_customers = int(identified_customers * intervention_success_rate)
-    estimated_savings = saved_customers * avg_customer_value
-    
-    return churn_rate, estimated_savings
+    # Display detailed calculation
+    st.markdown(
+        f"""
+        <div style="background-color:#f0f2f6; padding:20px; border-radius:10px; margin-top:10px">
+            <h4 style="margin-top:0">Calculation Details</h4>
+            <p>Current Annual Churn Cost: <b>${current_churn_cost:,.2f}</b> = ${avg_customer_value:,.2f} × {total_customers:,} × {churn_rate:.1%}</p>
+            <p>Improved Churn Rate: <b>{improved_churn_rate:.1%}</b> = {churn_rate:.1%} × (1 - {retention_improvement}%/100)</p>
+            <p>Improved Annual Churn Cost: <b>${improved_churn_cost:,.2f}</b> = ${avg_customer_value:,.2f} × {total_customers:,} × {improved_churn_rate:.1%}</p>
+            <p>Potential Annual Savings: <b>${potential_savings:,.2f}</b> = ${current_churn_cost:,.2f} - ${improved_churn_cost:,.2f}</p>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
 
 def display_overview():
     """Display project overview with real metrics or appropriate messages"""
@@ -823,23 +937,7 @@ def display_overview():
         with col5:
             st.info(f"**{model_metrics.get('roc_auc', 0):.1%}**\nROC-AUC")
     else:
-        # Display static numbers if metrics aren't available
-        col1, col2, col3, col4, col5 = st.columns(5)
-        
-        with col1:
-            st.info("**87.4%**\nAccuracy")
-        
-        with col2:
-            st.info("**83.2%**\nPrecision")
-            
-        with col3:
-            st.info("**79.8%**\nRecall")
-            
-        with col4:
-            st.info("**81.5%**\nF1 Score")
-        
-        with col5:
-            st.info("**90.4%**\nROC-AUC")
+        st.warning("⚠️ Model metrics not available. Please run the model training pipeline first.")
     
     # Calculate and display business metrics
     st.markdown("### Business Impact")
@@ -869,6 +967,8 @@ def display_overview():
                 f"{churn_rate:.1%}",
                 help="Number of distinct users who churned divided by total distinct users"
             )
+            # Log the calculation for transparency
+            print(f"Churn Rate Calculation: {churned_users} churned users / {distinct_users} total users = {churn_rate:.4f}")
         
         with col2:
             # Format large numbers with K/M suffix
@@ -884,6 +984,8 @@ def display_overview():
                 formatted_loss,
                 help="Sum of monthly charges for churned customers × 12"
             )
+            # Log the calculation for transparency
+            print(f"Annual Revenue Loss Calculation: ${monthly_revenue_loss:.2f} monthly loss × 12 = ${annual_revenue_loss:.2f}")
         
         with col3:
             # Calculate potential savings (assuming we can prevent 30% of churn with interventions)
@@ -902,139 +1004,25 @@ def display_overview():
                 formatted_savings,
                 help="Estimated savings if 30% of churn is prevented"
             )
+            # Log the calculation for transparency
+            print(f"Potential Annual Savings Calculation: ${annual_revenue_loss:.2f} × 30% = ${potential_savings:.2f}")
         
         # Business Impact Calculator
-        st.markdown("### Business Impact Calculator")
-        st.markdown("Estimate the financial impact of reducing customer churn with our model.")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            avg_customer_value = st.number_input(
-                "Average Annual Customer Value ($)",
-                min_value=0.0,
-                value=float(avg_monthly_charge * 12),
-                step=100.0,
-                format="%.2f"
-            )
-        
-        with col2:
-            total_customers = st.number_input(
-                "Total Customers",
-                min_value=0,
-                value=int(distinct_users),
-                step=100
-            )
-        
-        with col3:
-            retention_improvement = st.slider(
-                "Expected Retention Improvement (%)",
-                min_value=1,
-                max_value=50,
-                value=30,
-                step=1
-            )
-        
-        # Calculate the impact
-        current_churn_cost = avg_customer_value * total_customers * churn_rate
-        improved_churn_rate = churn_rate * (1 - retention_improvement / 100)
-        improved_churn_cost = avg_customer_value * total_customers * improved_churn_rate
-        potential_savings = current_churn_cost - improved_churn_cost
-        
-        # Display results in a box
-        st.markdown(
-            f"""
-            <div style="background-color:#f0f2f6; padding:20px; border-radius:10px; margin-top:10px">
-                <h4 style="margin-top:0">Estimated Financial Impact</h4>
-                <p>Current Annual Churn Cost: <b>${current_churn_cost:,.2f}</b></p>
-                <p>Improved Annual Churn Cost: <b>${improved_churn_cost:,.2f}</b></p>
-                <p>Potential Annual Savings: <b>${potential_savings:,.2f}</b></p>
-            </div>
-            """, 
-            unsafe_allow_html=True
-        )
+        display_business_impact()
     else:
-        # Show placeholders if we don't have the right data
-        st.warning("Required data columns not available. Using sample values instead.")
+        st.error("""
+        ## ⚠️ Required data not available
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Churn Rate", "25.0%")
-        with col2:
-            st.metric("Annual Revenue Loss", "$1.2M")
-        with col3:
-            st.metric("Potential Annual Savings", "$360K")
-            
-        # Sample business calculator
-        st.markdown("### Business Impact Calculator")
-        st.markdown("Estimate the financial impact of reducing customer churn with our model.")
+        The dashboard needs a dataset with the following columns:
+        - user_account_id
+        - churn
+        - monthly_charges
         
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            avg_customer_value = st.number_input(
-                "Average Annual Customer Value ($)",
-                min_value=0.0,
-                value=1200.0,
-                step=100.0,
-                format="%.2f"
-            )
-        
-        with col2:
-            total_customers = st.number_input(
-                "Total Customers",
-                min_value=0,
-                value=40000,
-                step=100
-            )
-        
-        with col3:
-            retention_improvement = st.slider(
-                "Expected Retention Improvement (%)",
-                min_value=1,
-                max_value=50,
-                value=30,
-                step=1
-            )
-        
-        # Calculate with sample values
-        sample_churn_rate = 0.25
-        current_churn_cost = avg_customer_value * total_customers * sample_churn_rate
-        improved_churn_rate = sample_churn_rate * (1 - retention_improvement / 100)
-        improved_churn_cost = avg_customer_value * total_customers * improved_churn_rate
-        potential_savings = current_churn_cost - improved_churn_cost
-        
-        # Display results in a box
-        st.markdown(
-            f"""
-            <div style="background-color:#f0f2f6; padding:20px; border-radius:10px; margin-top:10px">
-                <h4 style="margin-top:0">Estimated Financial Impact</h4>
-                <p>Current Annual Churn Cost: <b>${current_churn_cost:,.2f}</b></p>
-                <p>Improved Annual Churn Cost: <b>${improved_churn_cost:,.2f}</b></p>
-                <p>Potential Annual Savings: <b>${potential_savings:,.2f}</b></p>
-            </div>
-            """, 
-            unsafe_allow_html=True
-        )
-    
-    # Project workflow (moved below the business impact calculator)
-    st.subheader("Project Workflow")
-    
-    workflow_data = {
-        'Phase': [1, 2, 3, 4, 5, 6],
-        'Description': [
-            'Data Collection & Cleaning', 
-            'Exploratory Data Analysis', 
-            'Feature Engineering', 
-            'Model Development', 
-            'Hyperparameter Tuning', 
-            'Model Evaluation & Deployment'
-        ],
-        'Status': ['Complete', 'Complete', 'Complete', 'Complete', 'Complete', 'Complete'],
-    }
-    
-    workflow_df = pd.DataFrame(workflow_data)
-    st.dataframe(workflow_df.set_index('Phase'), use_container_width=True)
+        Please ensure your data contains these columns and run the data processing pipeline:
+        ```
+        python src/data/make_dataset.py
+        ```
+        """)
 
 def setup_sidebar():
     """Set up the sidebar elements for the dashboard"""
@@ -1109,40 +1097,118 @@ def main():
 def load_original_data():
     """Load the original dataset for business metrics calculation"""
     try:
-        # Try to load from various possible locations
-        for path in [
-            # Try the processed data first 
-            config['data']['processed_path'] if 'config' in globals() else None,
-            # Then try raw data paths
-            "/mnt/hdd/churn_project/data/churn_data.arff",
-            "data/full_dataset/mobile_churn_66kx66_numeric_nonull"
-        ]:
-            if path and os.path.exists(path):
-                # Check file extension to determine loading method
-                if path.endswith('.arff'):
-                    from scipy.io import arff
-                    data, meta = arff.loadarff(path)
-                    df = pd.DataFrame(data)
-                    # Convert byte strings to regular strings
-                    for col in df.select_dtypes(include=['object']).columns:
-                        df[col] = df[col].str.decode('utf-8')
-                    return df
-                elif path.endswith('.csv'):
-                    return pd.read_csv(path)
-                elif path.endswith('.parquet'):
-                    return pd.read_parquet(path)
-                else:
-                    # Try to load as CSV by default
-                    try:
+        # Try to load from various possible locations with better error handling
+        possible_paths = [
+            "data/full_dataset/mobile_churn_66kx66_numeric_nonull",
+            "data/processed/churn_data.csv",
+            "data/interim/processed_data.csv",
+            "data/raw/churn_data.csv"
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                print(f"Loading data from: {path}")
+                try:
+                    # Handle MATLAB file format
+                    if not path.endswith(('.csv', '.parquet')):
+                        try:
+                            # Try to load as MATLAB file
+                            from scipy.io import loadmat
+                            mat_data = loadmat(path)
+                            
+                            # MATLAB files typically store data in a variable
+                            # We need to find the main data variable
+                            # Usually it's the variable with the largest array that's not metadata
+                            main_var = None
+                            max_size = 0
+                            
+                            for var_name, var_value in mat_data.items():
+                                # Skip metadata variables (start with '__')
+                                if var_name.startswith('__'):
+                                    continue
+                                    
+                                if isinstance(var_value, np.ndarray) and var_value.size > max_size:
+                                    max_size = var_value.size
+                                    main_var = var_value
+                            
+                            if main_var is not None:
+                                # Convert to DataFrame
+                                df = pd.DataFrame(main_var)
+                                
+                                # Rename columns to something meaningful
+                                # Since we don't have column names, we'll use generic names
+                                df.columns = [f'feature_{i}' for i in range(df.shape[1])]
+                                
+                                # Try to identify key columns based on patterns
+                                # Assuming last column is often the target (churn)
+                                df.rename(columns={f'feature_{df.shape[1]-1}': 'churn'}, inplace=True)
+                                
+                                # Create a user_account_id column if it doesn't exist
+                                if 'user_account_id' not in df.columns:
+                                    df['user_account_id'] = range(1, len(df) + 1)
+                                
+                                # Create a monthly_charges column if it doesn't exist
+                                # We'll use a reasonable column as a proxy
+                                # Try to find a column with values that look like charges
+                                for col in df.columns:
+                                    if col != 'churn' and col != 'user_account_id':
+                                        col_mean = df[col].mean()
+                                        # If mean is between 10 and 200, it might be monthly charges
+                                        if 10 <= col_mean <= 200:
+                                            df.rename(columns={col: 'monthly_charges'}, inplace=True)
+                                            print(f"Using column {col} as monthly_charges (mean: {col_mean:.2f})")
+                                            break
+                                
+                                # If we still don't have monthly_charges, create a synthetic one
+                                if 'monthly_charges' not in df.columns:
+                                    # Use the first numeric column that's not churn or user_account_id
+                                    for col in df.columns:
+                                        if col != 'churn' and col != 'user_account_id':
+                                            df.rename(columns={col: 'monthly_charges'}, inplace=True)
+                                            print(f"Using column {col} as monthly_charges")
+                                            break
+                                
+                                print(f"Successfully loaded MATLAB file with {df.shape[0]} rows and {df.shape[1]} columns")
+                                return df
+                            else:
+                                print("Could not find main data variable in MATLAB file")
+                        except ImportError:
+                            print("scipy.io not available for loading MATLAB files")
+                        except Exception as e:
+                            print(f"Error loading MATLAB file: {e}")
+                    elif path.endswith('.csv'):
                         return pd.read_csv(path)
-                    except:
-                        pass
+                    elif path.endswith('.parquet'):
+                        return pd.read_parquet(path)
+                except Exception as e:
+                    print(f"Error loading {path}: {e}")
+                    continue
         
         # If we made it here, we couldn't find the data
+        st.error("""
+        ## ⚠️ Data not found or could not be loaded
+        
+        Could not load the churn dataset from any of the expected locations. Please ensure:
+        
+        1. The data file exists at one of these paths:
+           - data/full_dataset/mobile_churn_66kx66_numeric_nonull
+           - data/processed/churn_data.csv
+           - data/interim/processed_data.csv
+           - data/raw/churn_data.csv
+        
+        2. You have the necessary dependencies installed:
+           - For MATLAB files: scipy
+           - For parquet files: pyarrow or fastparquet
+        
+        Run the data processing pipeline to generate the required files:
+        ```
+        python src/data/make_dataset.py
+        ```
+        """)
         return None
         
     except Exception as e:
-        logger.error(f"Error loading original data: {e}")
+        st.error(f"Error loading original data: {e}")
         return None
 
 if __name__ == "__main__":
