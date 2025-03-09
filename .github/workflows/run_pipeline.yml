@@ -52,6 +52,11 @@ jobs:
         echo "Generated visualization files:"
         ls -la reports/figures/
         
+    - name: Create pipeline status file
+      run: |
+        echo "Pipeline completed at $(date)" > reports/pipeline_status.json
+        echo "{\"status\":\"completed\",\"timestamp\":\"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"}" > reports/pipeline_status.json
+        
     - name: Commit and push changes
       run: |
         git config --global user.name 'GitHub Actions Bot'
@@ -59,5 +64,6 @@ jobs:
         git add reports/metrics/*.json
         git add reports/metrics/*.csv
         git add reports/figures/*.png
+        git add reports/pipeline_status.json
         git commit -m "Update metrics and visualizations [skip ci]" || echo "No changes to commit"
         git push 

@@ -1170,6 +1170,68 @@ def display_live_logs():
 # Call this function in your sidebar
 display_live_logs()
 
+# Check if required files exist
+required_files = ['reports/metrics/final_model_metrics.json']
+missing_files = [f for f in required_files if not os.path.exists(f)]
+
+if missing_files and not st.session_state.get('processing_started', False):
+    # This is a much nicer loading screen
+    st.set_page_config(page_title="Customer Churn Analysis", page_icon="📊", layout="wide")
+    
+    # Create a centered container for the loading message
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown("""
+        <div style="text-align: center; padding: 50px 0;">
+            <img src="https://cdn.dribbble.com/users/563824/screenshots/3633228/untitled-5.gif" width="200">
+            <h1 style="margin-top: 20px;">Pipeline Running</h1>
+            <p style="font-size: 18px; color: #666;">
+                The churn prediction pipeline is currently running in GitHub Actions.<br>
+                This typically takes 2-5 minutes to complete.
+            </p>
+            <div style="margin-top: 30px; background-color: #f1f1f1; border-radius: 5px; padding: 15px;">
+                <p style="font-size: 16px; margin: 0;">
+                    <strong>Note:</strong> The dashboard will automatically display when the pipeline is complete.<br>
+                    You can refresh this page to check if the pipeline has finished.
+                </p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Add a refresh button that looks nicer
+        if st.button("Refresh Now", key="refresh_loading", use_container_width=True):
+            st.experimental_rerun()
+        
+        # Manual run option if this is a local deployment
+        if not os.environ.get('GITHUB_ACTIONS'):
+            st.markdown("---")
+            st.markdown("### Local Development Options")
+            if st.button("Run Pipeline Locally", key="run_local", use_container_width=True):
+                st.session_state.processing_started = True
+                with st.spinner("Running ML pipeline..."):
+                    success = process_data()
+                
+                if success:
+                    st.success("Pipeline completed successfully!")
+                    st.experimental_rerun()
+                else:
+                    st.error("Pipeline execution failed. Check the logs for details.")
+                    st.session_state.processing_started = False
+    
+    # Check if this is inside GitHub Actions
+    if os.environ.get('GITHUB_ACTIONS'):
+        st.markdown("""
+        <script>
+            // Auto-refresh the page every 10 seconds when in GitHub Actions
+            setTimeout(function() {
+                window.location.reload();
+            }, 10000);
+        </script>
+        """, unsafe_allow_html=True)
+    
+    st.stop()  # Stop execution until the pipeline is run
+
 if __name__ == "__main__":
     # This allows the script to be run directly
     pass  # Main execution handled by Streamlit 
