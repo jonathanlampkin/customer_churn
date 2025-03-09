@@ -21,7 +21,7 @@ from sklearn.inspection import permutation_importance
 import seaborn as sns
 import warnings
 import logging
-import datetime
+from datetime import datetime
 import os.path
 import threading
 import math
@@ -78,9 +78,9 @@ os.makedirs('data/interim', exist_ok=True)
 
 # Define data path handling based on environment
 if os.environ.get('GITHUB_ACTIONS'):
-    # Use the full ARFF dataset in the repository - no subsets, no samples
-    DEFAULT_DATA_PATH = "data/full_dataset/churn_data.arff"
-    pipeline_logger.info("Running in GitHub Actions environment with complete dataset (ARFF)")
+    # Use the actual dataset file in the repository (appears to be CSV)
+    DEFAULT_DATA_PATH = "data/full_dataset/mobile_churn_66kx66_numeric_nonull"
+    pipeline_logger.info("Running in GitHub Actions environment with complete dataset")
 else:
     # For local development, use the path provided
     DEFAULT_DATA_PATH = "/mnt/hdd/churn_project/data/churn_data.arff"
@@ -232,8 +232,24 @@ def process_data(data_path=DEFAULT_DATA_PATH):
         status.info("Loading data...")
         step_start = time.time()
         
-        data, meta = arff.loadarff(data_path)
-        pipeline_logger.info(f"Dataset loaded with shape: {data.shape}")
+        # Modified data loading to handle file without extension
+        try:
+            # First try loading as CSV
+            data = pd.read_csv(data_path)
+            pipeline_logger.info(f"Dataset loaded as CSV with shape: {data.shape}")
+        except Exception as e:
+            pipeline_logger.info(f"Failed to load as CSV, trying ARFF: {str(e)}")
+            try:
+                # Fall back to ARFF if CSV fails
+                data_arff, meta = arff.loadarff(data_path)
+                data = pd.DataFrame(data_arff)
+                # Convert byte strings to regular strings
+                for col in data.select_dtypes(include=['object']).columns:
+                    data[col] = data[col].str.decode('utf-8')
+                pipeline_logger.info(f"Dataset loaded as ARFF with shape: {data.shape}")
+            except Exception as arff_e:
+                pipeline_logger.error(f"Failed to load data as ARFF: {str(arff_e)}")
+                raise
         
         # Log data statistics
         pipeline_logger.info(f"Dataset info:")
