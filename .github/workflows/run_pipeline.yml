@@ -54,16 +54,15 @@ jobs:
         
     - name: Create pipeline status file
       run: |
-        echo "Pipeline completed at $(date)" > reports/pipeline_status.json
         echo "{\"status\":\"completed\",\"timestamp\":\"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"}" > reports/pipeline_status.json
         
     - name: Commit and push changes
       run: |
         git config --global user.name 'GitHub Actions Bot'
         git config --global user.email 'actions@github.com'
-        git add reports/metrics/*.json
-        git add reports/metrics/*.csv
-        git add reports/figures/*.png
-        git add reports/pipeline_status.json
+        git add reports/metrics/*.json reports/pipeline_status.json
+        git add reports/metrics/*.csv || true
+        git add reports/figures/*.png || true
         git commit -m "Update metrics and visualizations [skip ci]" || echo "No changes to commit"
+        git remote set-url origin https://x-access-token:${{ secrets.PAT }}@github.com/${{ github.repository }}
         git push 
