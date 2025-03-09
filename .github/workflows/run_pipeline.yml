@@ -63,4 +63,4 @@ jobs:
         message: 'Update metrics and visualizations [skip ci]'
         add: 'reports/metrics reports/figures reports/pipeline_status.json'
         default_author: github_actions
-        github_token: ${{ secrets.GITHUB_TOKEN }} 
+        token: ${{ secrets.PAT }}  # Use your PAT instead of GITHUB_TOKEN 
