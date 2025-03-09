@@ -63,6 +63,15 @@ logging.basicConfig(
 pipeline_logger = logging.getLogger('pipeline')
 pipeline_logger.setLevel(logging.INFO)
 
+# Define data path handling based on environment
+if os.environ.get('GITHUB_ACTIONS'):
+    # Use the actual dataset file in the repository (appears to be CSV)
+    DEFAULT_DATA_PATH = "data/full_dataset/mobile_churn_66kx66_numeric_nonull"
+    pipeline_logger.info("Running in GitHub Actions environment with complete dataset")
+else:
+    # For local development, use the path provided
+    DEFAULT_DATA_PATH = "/mnt/hdd/churn_project/data/churn_data.arff"
+
 # Create a function to capture timing information
 def timed_log(func):
     """Decorator to log function execution time"""
