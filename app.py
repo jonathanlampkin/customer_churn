@@ -10,13 +10,8 @@ import json
 # Add the src directory to the path so we can import modules
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Configure the page
-st.set_page_config(
-    page_title="Customer Churn Prediction",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# DO NOT set page config here since it's set in the dashboard file
+# Let the dashboard handle all Streamlit setup
 
 # Create necessary directories
 os.makedirs('reports/metrics', exist_ok=True)
@@ -33,28 +28,18 @@ required_files = [
 missing_files = [f for f in required_files if not os.path.exists(f)]
 
 if missing_files:
-    st.error("Required data files are missing. The ML pipeline needs to be run first.")
-    st.error(f"Missing files: {', '.join(missing_files)}")
+    # This check for missing files should use other methods
+    # to avoid using st. commands before the page config
+    missing_file_str = ', '.join(missing_files)
     
-    if st.button("Run Pipeline Now"):
-        import subprocess
-        try:
-            with st.spinner("Running ML pipeline..."):
-                result = subprocess.run(["python", "src/run_pipeline.py"], 
-                                      capture_output=True, text=True)
-            if result.returncode == 0:
-                st.success("Pipeline completed successfully!")
-                st.experimental_rerun()
-            else:
-                st.error("Pipeline failed. Check the error below:")
-                st.code(result.stderr)
-        except Exception as e:
-            st.error(f"Error running pipeline: {str(e)}")
-    
-    st.stop()  # Don't continue with the app if files are missing
-
-if __name__ == "__main__":
-    # Instead of importing a specific function, just run the dashboard file
-    import runpy
-    # This will execute the dashboard module as __main__
-    runpy.run_module("src.dashboard.app", run_name="__main__") 
+    if __name__ == "__main__":
+        # Instead of importing a specific function, just run the dashboard file
+        import runpy
+        # This will execute the dashboard module as __main__
+        runpy.run_module("src.dashboard.app", run_name="__main__")
+else:
+    if __name__ == "__main__":
+        # Instead of importing a specific function, just run the dashboard file
+        import runpy
+        # This will execute the dashboard module as __main__
+        runpy.run_module("src.dashboard.app", run_name="__main__") 
